@@ -38,7 +38,7 @@ fn activate_gamepad(
                 next_state.set(ActiveInput::Gamepad);
                 return;
             }
-            _ => (),
+            _ => (), // connections and disconnections are ignored
         }
     }
 }

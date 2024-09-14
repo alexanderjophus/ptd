@@ -1,3 +1,5 @@
+mod camera;
+
 use std::f32::consts::PI;
 
 use super::GameState;
@@ -5,6 +7,7 @@ use bevy::gltf::Gltf;
 use bevy::prelude::*;
 use bevy_asset_loader::prelude::*;
 use bevy_rapier3d::prelude::*;
+use camera::CameraPlugin;
 use leafwing_input_manager::prelude::*;
 
 #[derive(PartialEq, Eq, Clone, Copy, Hash, Debug, Reflect)]
@@ -34,11 +37,10 @@ pub struct GamePlugin;
 
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((InputManagerPlugin::<PlayerAction>::default(),))
+        app.add_plugins((InputManagerPlugin::<PlayerAction>::default(), CameraPlugin))
             .init_resource::<ActionState<PlayerAction>>()
             .insert_resource(PlayerAction::default_input_map())
             .add_systems(OnEnter(GameState::Game), setup)
-            .add_systems(Update, control_camera.run_if(in_state(GameState::Game)))
             .add_systems(
                 Update,
                 control_placeholder.run_if(in_state(GameState::Game)),
@@ -68,10 +70,6 @@ impl PlayerAction {
 
 #[derive(Reflect, Component, Default)]
 #[reflect(Component)]
-struct Camera;
-
-#[derive(Reflect, Component, Default)]
-#[reflect(Component)]
 struct TowerPlaceholder;
 
 #[derive(Reflect, Component, Default)]
@@ -79,15 +77,6 @@ struct TowerPlaceholder;
 struct Tower;
 
 fn setup(mut commands: Commands, assets: Res<GltfAssets>, assets_gltf: Res<Assets<Gltf>>) {
-    commands.spawn((
-        Camera3dBundle {
-            transform: Transform::from_xyz(0.0, 2.0, 5.0)
-                .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
-            ..default()
-        },
-        Camera,
-    ));
-
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
             illuminance: light_consts::lux::OVERCAST_DAY,
@@ -116,19 +105,6 @@ fn setup(mut commands: Commands, assets: Res<GltfAssets>, assets_gltf: Res<Asset
             TowerPlaceholder,
         ));
     }
-}
-
-fn control_camera(
-    time: Res<Time>,
-    action_state: Res<ActionState<PlayerAction>>,
-    mut query: Query<&mut Transform, With<Camera>>,
-) {
-    let mut player_transform = query.single_mut();
-    let move_delta = time.delta_seconds()
-        * action_state
-            .clamped_axis_pair(&PlayerAction::MoveCamera)
-            .xy();
-    player_transform.translation += Vec3::new(move_delta.x, 0.0, -move_delta.y);
 }
 
 fn control_placeholder(
