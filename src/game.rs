@@ -1,4 +1,3 @@
-use std::f32::consts::PI;
 use std::time::Duration;
 
 use super::GameState;
@@ -20,7 +19,6 @@ enum GameplayState {
 enum PlayerAction {
     Pause,
     Move,
-    Look,
     Shoot,
 }
 
@@ -29,7 +27,6 @@ impl Actionlike for PlayerAction {
         match self {
             PlayerAction::Pause => InputControlKind::Button,
             PlayerAction::Move => InputControlKind::DualAxis,
-            PlayerAction::Look => InputControlKind::DualAxis,
             PlayerAction::Shoot => InputControlKind::Button,
         }
     }
@@ -51,7 +48,7 @@ impl Plugin for GamePlugin {
             .insert_resource(PlayerAction::default_input_map())
             .add_systems(OnEnter(GameState::Game), setup)
             .add_systems(Update, toggle_pause.run_if(in_state(GameState::Game)))
-            .add_systems(Update, control_player.run_if(in_state(GameState::Game)))
+            .add_systems(Update, control_camera.run_if(in_state(GameState::Game)))
             .add_systems(Update, shoot.run_if(in_state(GameState::Game)))
             .add_systems(Update, move_bullets.run_if(in_state(GameState::Game)))
             .add_systems(Update, despawn_shots.run_if(in_state(GameState::Game)));
@@ -65,13 +62,11 @@ impl PlayerAction {
 
         // Default gamepad input bindings
         input_map.insert_dual_axis(Self::Move, GamepadStick::LEFT);
-        input_map.insert_dual_axis(Self::Look, GamepadStick::RIGHT);
         input_map.insert(Self::Pause, GamepadButtonType::Start);
         input_map.insert(Self::Shoot, GamepadButtonType::South);
 
         // Default kbm input bindings
         input_map.insert_dual_axis(Self::Move, KeyboardVirtualDPad::WASD);
-        input_map.insert_dual_axis(Self::Look, KeyboardVirtualDPad::ARROW_KEYS);
         input_map.insert(Self::Pause, KeyCode::Escape);
         input_map.insert(Self::Shoot, KeyCode::Space);
 
@@ -79,14 +74,23 @@ impl PlayerAction {
     }
 }
 
-#[derive(Component)]
+#[derive(Reflect, Component, Default)]
+#[reflect(Component)]
+struct Camera;
+
+#[derive(Reflect, Component, Default)]
+#[reflect(Component)]
 struct Tower;
 
 fn setup(mut commands: Commands, assets: Res<GltfAssets>, assets_gltf: Res<Assets<Gltf>>) {
-    commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(0.0, 2.0, 5.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
-        ..default()
-    });
+    commands.spawn((
+        Camera3dBundle {
+            transform: Transform::from_xyz(0.0, 2.0, 5.0)
+                .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
+            ..default()
+        },
+        Camera,
+    ));
 
     if let Some(gltf) = assets_gltf.get(&assets.charmander.clone()) {
         commands
@@ -138,25 +142,15 @@ fn toggle_pause(
     }
 }
 
-fn control_player(
+fn control_camera(
     time: Res<Time>,
     action_state: Res<ActionState<PlayerAction>>,
-    mut query: Query<&mut Transform, With<Tower>>,
+    mut query: Query<&mut Transform, With<Camera>>,
 ) {
     let mut player_transform = query.single_mut();
     let move_delta =
         time.delta_seconds() * action_state.clamped_axis_pair(&PlayerAction::Move).xy();
     player_transform.translation += Vec3::new(move_delta.x, 0.0, move_delta.y);
-
-    // look is a bit funky - doesn't work as expected
-    let axis_pair = action_state.clamped_axis_pair(&PlayerAction::Look);
-    let (mut yaw, mut pitch, _) = player_transform.rotation.to_euler(EulerRot::YXZ);
-
-    pitch += axis_pair.y * time.delta_seconds() * 2.0;
-    pitch = pitch.clamp(-PI / 8.0, PI / 8.0);
-    yaw -= axis_pair.x * time.delta_seconds() * 2.0;
-    player_transform.rotation =
-        Quat::from_axis_angle(Vec3::Y, yaw) * Quat::from_axis_angle(Vec3::X, pitch);
 
     // impl pause
     if action_state.just_pressed(&PlayerAction::Pause) {
