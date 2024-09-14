@@ -1,9 +1,7 @@
 use std::f32::consts::PI;
 
 use super::GameState;
-use bevy::color::palettes::css::{ORANGE_RED, WHITE};
 use bevy::gltf::Gltf;
-use bevy::pbr::CascadeShadowConfigBuilder;
 use bevy::prelude::*;
 use bevy_asset_loader::prelude::*;
 use bevy_rapier3d::prelude::*;
@@ -90,7 +88,6 @@ fn setup(mut commands: Commands, assets: Res<GltfAssets>, assets_gltf: Res<Asset
         Camera,
     ));
 
-    // spawn spotlights, etc.
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
             illuminance: light_consts::lux::OVERCAST_DAY,
@@ -145,19 +142,6 @@ fn control_placeholder(
             .clamped_axis_pair(&PlayerAction::MovePlaceholderTower)
             .xy();
     player_transform.translation += Vec3::new(move_delta.x, 0.0, -move_delta.y);
-}
-
-#[derive(Reflect, Component, Default)]
-#[reflect(Component)]
-pub struct Bullet {
-    pub direction: Vec3,
-    pub speed: f32,
-}
-
-#[derive(Reflect, Component, Default)]
-#[reflect(Component)]
-struct ShotTimer {
-    timer: Timer,
 }
 
 fn place_tower(
