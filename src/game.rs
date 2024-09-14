@@ -1,6 +1,9 @@
+use std::f32::consts::PI;
+
 use super::GameState;
-use bevy::color::palettes::css::WHITE;
+use bevy::color::palettes::css::{ORANGE_RED, WHITE};
 use bevy::gltf::Gltf;
+use bevy::pbr::CascadeShadowConfigBuilder;
 use bevy::prelude::*;
 use bevy_asset_loader::prelude::*;
 use bevy_rapier3d::prelude::*;
@@ -43,8 +46,6 @@ impl Plugin for GamePlugin {
                 control_placeholder.run_if(in_state(GameState::Game)),
             )
             .add_systems(Update, place_tower.run_if(in_state(GameState::Game)));
-        // .add_systems(Update, move_bullets.run_if(in_state(GameState::Game)))
-        // .add_systems(Update, despawn_shots.run_if(in_state(GameState::Game)));
     }
 }
 
@@ -89,39 +90,33 @@ fn setup(mut commands: Commands, assets: Res<GltfAssets>, assets_gltf: Res<Asset
         Camera,
     ));
 
-    if let Some(gltf) = assets_gltf.get(&assets.charmander.clone()) {
-        commands
-            .spawn((
-                SceneBundle {
-                    scene: gltf.scenes[0].clone(),
-                    transform: Transform::from_xyz(0.0, 0.0, 0.0).looking_at(Vec3::Z, Vec3::Y),
-                    ..Default::default()
-                },
-                AsyncSceneCollider {
-                    shape: Some(ComputedColliderShape::TriMesh),
-                    ..Default::default()
-                },
-                TowerPlaceholder,
-            ))
-            .with_children(|parent| {
-                parent.spawn(SpotLightBundle {
-                    transform: Transform::from_xyz(-1.0, 2.0, 0.0)
-                        .looking_at(Vec3::new(-1.0, 0.0, 0.0), Vec3::Z),
-                    spot_light: SpotLight {
-                        intensity: 100_000.0,
-                        color: WHITE.into(),
-                        shadows_enabled: true,
-                        inner_angle: 0.6,
-                        outer_angle: 0.8,
-                        ..default()
-                    },
-                    ..default()
-                });
-            });
+    // spawn spotlights, etc.
+    commands.spawn(DirectionalLightBundle {
+        directional_light: DirectionalLight {
+            illuminance: light_consts::lux::OVERCAST_DAY,
+            shadows_enabled: true,
+            ..default()
+        },
+        transform: Transform {
+            translation: Vec3::new(0.0, 20.0, 0.0),
+            rotation: Quat::from_rotation_x(-PI / 4.),
+            ..default()
+        },
+        ..default()
+    });
 
+    if let Some(gltf) = assets_gltf.get(&assets.charmander.clone()) {
         commands.spawn((
-            SpatialBundle::from_transform(Transform::from_translation(Vec3::new(0.0, 0.0, 0.0))),
-            SpatialListener::new(4.0),
+            SceneBundle {
+                scene: gltf.scenes[0].clone(),
+                transform: Transform::from_xyz(0.0, 0.0, 0.0).looking_at(Vec3::Z, Vec3::Y),
+                ..Default::default()
+            },
+            AsyncSceneCollider {
+                shape: Some(ComputedColliderShape::TriMesh),
+                ..Default::default()
+            },
+            TowerPlaceholder,
         ));
     }
 }
