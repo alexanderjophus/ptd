@@ -14,6 +14,7 @@ use leafwing_input_manager::prelude::*;
 enum PlayerAction {
     MoveCamera,
     MovePlaceholderTower,
+    ToggleTowerType,
     Place,
 }
 
@@ -22,6 +23,7 @@ impl Actionlike for PlayerAction {
         match self {
             PlayerAction::MoveCamera => InputControlKind::DualAxis,
             PlayerAction::MovePlaceholderTower => InputControlKind::DualAxis,
+            PlayerAction::ToggleTowerType => InputControlKind::Button,
             PlayerAction::Place => InputControlKind::Button,
         }
     }
@@ -30,7 +32,21 @@ impl Actionlike for PlayerAction {
 #[derive(AssetCollection, Resource)]
 pub struct GltfAssets {
     #[asset(path = "models/sv-charmander.glb")]
-    charmander: Handle<Gltf>,
+    pub charmander: Handle<Gltf>,
+    #[asset(path = "models/sv-gastly.glb")]
+    pub gastly: Handle<Gltf>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
+enum TowerOptions {
+    #[default]
+    Charmander,
+    Gastly,
+}
+
+#[derive(Resource, Default)]
+pub struct CurrentTower {
+    tower_option: TowerOptions,
 }
 
 pub struct GamePlugin;
@@ -40,12 +56,12 @@ impl Plugin for GamePlugin {
         app.add_plugins((InputManagerPlugin::<PlayerAction>::default(), CameraPlugin))
             .init_resource::<ActionState<PlayerAction>>()
             .insert_resource(PlayerAction::default_input_map())
+            .insert_resource(CurrentTower::default())
             .add_systems(OnEnter(GameState::Game), setup)
             .add_systems(
                 Update,
-                control_placeholder.run_if(in_state(GameState::Game)),
-            )
-            .add_systems(Update, place_tower.run_if(in_state(GameState::Game)));
+                (control_placeholder, toggle_type, place_tower).run_if(in_state(GameState::Game)),
+            );
     }
 }
 
@@ -57,11 +73,13 @@ impl PlayerAction {
         // Default gamepad input bindings
         input_map.insert_dual_axis(Self::MoveCamera, GamepadStick::LEFT);
         input_map.insert_dual_axis(Self::MovePlaceholderTower, GamepadStick::RIGHT);
+        input_map.insert(Self::ToggleTowerType, GamepadButtonType::East);
         input_map.insert(Self::Place, GamepadButtonType::South);
 
         // Default kbm input bindings
         input_map.insert_dual_axis(Self::MoveCamera, KeyboardVirtualDPad::WASD);
         input_map.insert_dual_axis(Self::MovePlaceholderTower, KeyboardVirtualDPad::ARROW_KEYS);
+        input_map.insert(Self::ToggleTowerType, KeyCode::KeyT);
         input_map.insert(Self::Place, KeyCode::Space);
 
         input_map
@@ -76,7 +94,7 @@ struct TowerPlaceholder;
 #[reflect(Component)]
 struct Tower;
 
-fn setup(mut commands: Commands, assets: Res<GltfAssets>, assets_gltf: Res<Assets<Gltf>>) {
+fn setup(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
             illuminance: light_consts::lux::OVERCAST_DAY,
@@ -91,20 +109,18 @@ fn setup(mut commands: Commands, assets: Res<GltfAssets>, assets_gltf: Res<Asset
         ..default()
     });
 
-    if let Some(gltf) = assets_gltf.get(&assets.charmander.clone()) {
-        commands.spawn((
-            SceneBundle {
-                scene: gltf.scenes[0].clone(),
-                transform: Transform::from_xyz(0.0, 0.0, 0.0).looking_at(Vec3::Z, Vec3::Y),
-                ..Default::default()
-            },
-            AsyncSceneCollider {
-                shape: Some(ComputedColliderShape::TriMesh),
-                ..Default::default()
-            },
-            TowerPlaceholder,
-        ));
-    }
+    // spawn square placeholder for tower
+    let placeholder_mesh = meshes.add(Circle::new(1.0));
+    commands.spawn((
+        PbrBundle {
+            mesh: placeholder_mesh,
+            transform: Transform::from_rotation(Quat::from_rotation_x(
+                -std::f32::consts::FRAC_PI_2,
+            )),
+            ..default()
+        },
+        TowerPlaceholder,
+    ));
 }
 
 fn control_placeholder(
@@ -120,16 +136,34 @@ fn control_placeholder(
     player_transform.translation += Vec3::new(move_delta.x, 0.0, -move_delta.y);
 }
 
+fn toggle_type(
+    action_state: Res<ActionState<PlayerAction>>,
+    mut current_tower: ResMut<CurrentTower>,
+) {
+    if action_state.just_pressed(&PlayerAction::ToggleTowerType) {
+        info!("Toggling tower type");
+        current_tower.tower_option = match current_tower.tower_option {
+            TowerOptions::Charmander => TowerOptions::Gastly,
+            TowerOptions::Gastly => TowerOptions::Charmander,
+        };
+    }
+}
+
 fn place_tower(
     action_state: Res<ActionState<PlayerAction>>,
     mut commands: Commands,
     placeholder_query: Query<&Transform, With<TowerPlaceholder>>,
     assets: Res<GltfAssets>,
     assets_gltf: Res<Assets<Gltf>>,
+    current_tower: Res<CurrentTower>,
 ) {
     let placeholder = placeholder_query.single();
     if action_state.just_pressed(&PlayerAction::Place) {
-        if let Some(gltf) = assets_gltf.get(&assets.charmander.clone()) {
+        let chosen_tower = match current_tower.tower_option {
+            TowerOptions::Charmander => &assets.charmander,
+            TowerOptions::Gastly => &assets.gastly,
+        };
+        if let Some(gltf) = assets_gltf.get(chosen_tower) {
             commands.spawn((
                 SceneBundle {
                     scene: gltf.scenes[0].clone(),
