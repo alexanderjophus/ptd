@@ -3,7 +3,7 @@ mod camera;
 use std::f32::consts::PI;
 
 use super::GameState;
-use bevy::gltf::Gltf;
+use bevy::gltf::{Gltf, GltfMesh};
 use bevy::prelude::*;
 use bevy_asset_loader::prelude::*;
 use bevy_rapier3d::prelude::*;
@@ -60,7 +60,8 @@ impl Plugin for GamePlugin {
             .add_systems(OnEnter(GameState::Game), setup)
             .add_systems(
                 Update,
-                (control_placeholder, toggle_type, place_tower).run_if(in_state(GameState::Game)),
+                (control_placeholder, toggle_placeholder_type, place_tower)
+                    .run_if(in_state(GameState::Game)),
             );
     }
 }
@@ -94,7 +95,14 @@ struct TowerPlaceholder;
 #[reflect(Component)]
 struct Tower;
 
-fn setup(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
+fn setup(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    assets_gltfmesh: Res<Assets<GltfMesh>>,
+    assets_gltf: Res<GltfAssets>,
+    res: Res<Assets<Gltf>>,
+    current_tower: Res<CurrentTower>,
+) {
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
             illuminance: light_consts::lux::OVERCAST_DAY,
@@ -111,16 +119,32 @@ fn setup(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
 
     // spawn square placeholder for tower
     let placeholder_mesh = meshes.add(Circle::new(1.0));
-    commands.spawn((
-        PbrBundle {
-            mesh: placeholder_mesh,
-            transform: Transform::from_rotation(Quat::from_rotation_x(
-                -std::f32::consts::FRAC_PI_2,
-            )),
-            ..default()
-        },
-        TowerPlaceholder,
-    ));
+    let placeholder_tower = match current_tower.tower_option {
+        TowerOptions::Charmander => res.get(&assets_gltf.charmander).unwrap(),
+        TowerOptions::Gastly => res.get(&assets_gltf.gastly).unwrap(),
+    };
+    let placeholder_tower_mesh = assets_gltfmesh.get(&placeholder_tower.meshes[0]).unwrap();
+    commands
+        .spawn((
+            PbrBundle {
+                mesh: placeholder_tower_mesh.primitives[0].mesh.clone(),
+                material: placeholder_tower.materials[0].clone(),
+                transform: Transform::default().with_rotation(
+                    Quat::from_rotation_x(PI / 2.).mul_quat(Quat::from_rotation_z(PI)),
+                ),
+                ..default()
+            },
+            TowerPlaceholder,
+        ))
+        .with_children(|parent| {
+            parent.spawn(PbrBundle {
+                mesh: placeholder_mesh,
+                transform: Transform::from_rotation(Quat::from_rotation_x(
+                    -std::f32::consts::FRAC_PI_2,
+                )),
+                ..default()
+            });
+        });
 }
 
 fn control_placeholder(
@@ -136,9 +160,13 @@ fn control_placeholder(
     player_transform.translation += Vec3::new(move_delta.x, 0.0, -move_delta.y);
 }
 
-fn toggle_type(
+fn toggle_placeholder_type(
     action_state: Res<ActionState<PlayerAction>>,
     mut current_tower: ResMut<CurrentTower>,
+    assets_gltfmesh: Res<Assets<GltfMesh>>,
+    assets_gltf: Res<GltfAssets>,
+    res: Res<Assets<Gltf>>,
+    mut query: Query<(&mut Handle<Mesh>, &mut Handle<StandardMaterial>), With<TowerPlaceholder>>,
 ) {
     if action_state.just_pressed(&PlayerAction::ToggleTowerType) {
         info!("Toggling tower type");
@@ -146,36 +174,46 @@ fn toggle_type(
             TowerOptions::Charmander => TowerOptions::Gastly,
             TowerOptions::Gastly => TowerOptions::Charmander,
         };
+        let placeholder_tower = match current_tower.tower_option {
+            TowerOptions::Charmander => res.get(&assets_gltf.charmander).unwrap(),
+            TowerOptions::Gastly => res.get(&assets_gltf.gastly).unwrap(),
+        };
+        let placeholder_tower_mesh = assets_gltfmesh.get(&placeholder_tower.meshes[0]).unwrap();
+        let (mut mesh, mut mat) = query.single_mut();
+        *mesh = placeholder_tower_mesh.primitives[0].mesh.clone();
+        *mat = placeholder_tower.materials[0].clone();
     }
 }
 
 fn place_tower(
     action_state: Res<ActionState<PlayerAction>>,
     mut commands: Commands,
-    placeholder_query: Query<&Transform, With<TowerPlaceholder>>,
-    assets: Res<GltfAssets>,
-    assets_gltf: Res<Assets<Gltf>>,
+    res: Res<Assets<Gltf>>,
+    assets_gltf: Res<GltfAssets>,
+    assets_gltfmesh: Res<Assets<GltfMesh>>,
     current_tower: Res<CurrentTower>,
+    placeholder_query: Query<&Transform, With<TowerPlaceholder>>,
 ) {
-    let placeholder = placeholder_query.single();
+    let placeholder_transform = placeholder_query.single();
     if action_state.just_pressed(&PlayerAction::Place) {
-        let chosen_tower = match current_tower.tower_option {
-            TowerOptions::Charmander => &assets.charmander,
-            TowerOptions::Gastly => &assets.gastly,
+        let placeholder_tower = match current_tower.tower_option {
+            TowerOptions::Charmander => res.get(&assets_gltf.charmander).unwrap(),
+            TowerOptions::Gastly => res.get(&assets_gltf.gastly).unwrap(),
         };
-        if let Some(gltf) = assets_gltf.get(chosen_tower) {
-            commands.spawn((
-                SceneBundle {
-                    scene: gltf.scenes[0].clone(),
-                    transform: placeholder.looking_to(Vec3::Z, Vec3::Y),
-                    ..Default::default()
-                },
-                AsyncSceneCollider {
-                    shape: Some(ComputedColliderShape::TriMesh),
-                    ..Default::default()
-                },
-                Tower,
-            ));
-        }
+        let placeholder_tower_mesh = assets_gltfmesh.get(&placeholder_tower.meshes[0]).unwrap();
+
+        commands.spawn((
+            PbrBundle {
+                mesh: placeholder_tower_mesh.primitives[0].mesh.clone(),
+                material: placeholder_tower.materials[0].clone(),
+                transform: placeholder_transform.clone(),
+                ..default()
+            },
+            AsyncSceneCollider {
+                shape: Some(ComputedColliderShape::TriMesh),
+                ..Default::default()
+            },
+            Tower,
+        ));
     }
 }
