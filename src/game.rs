@@ -1,21 +1,33 @@
 mod camera;
+mod placement;
+mod wave;
 
 use std::f32::consts::PI;
 
 use super::GameState;
-use bevy::gltf::{Gltf, GltfMesh};
+use bevy::gltf::Gltf;
 use bevy::prelude::*;
 use bevy_asset_loader::prelude::*;
-use bevy_rapier3d::prelude::*;
 use camera::CameraPlugin;
 use leafwing_input_manager::prelude::*;
+use placement::PlacementPlugin;
+use wave::WavePlugin;
+
+// Enum that will be used as a state for the gameplay loop
+#[derive(Clone, Eq, PartialEq, Debug, Hash, Default, States)]
+enum GamePlayState {
+    #[default]
+    Placement,
+    Wave,
+}
 
 #[derive(PartialEq, Eq, Clone, Copy, Hash, Debug, Reflect)]
 enum PlayerAction {
     MoveCamera,
     MovePlaceholderTower,
     ToggleTowerType,
-    Place,
+    PlaceTower,
+    EndPlacement,
 }
 
 impl Actionlike for PlayerAction {
@@ -24,7 +36,8 @@ impl Actionlike for PlayerAction {
             PlayerAction::MoveCamera => InputControlKind::DualAxis,
             PlayerAction::MovePlaceholderTower => InputControlKind::DualAxis,
             PlayerAction::ToggleTowerType => InputControlKind::Button,
-            PlayerAction::Place => InputControlKind::Button,
+            PlayerAction::PlaceTower => InputControlKind::Button,
+            PlayerAction::EndPlacement => InputControlKind::Button,
         }
     }
 }
@@ -33,35 +46,29 @@ impl Actionlike for PlayerAction {
 pub struct GltfAssets {
     #[asset(path = "models/sv-charmander.glb")]
     pub charmander: Handle<Gltf>,
+    #[asset(path = "models/sv-diglett.glb")]
+    pub diglett: Handle<Gltf>,
     #[asset(path = "models/sv-gastly.glb")]
     pub gastly: Handle<Gltf>,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Eq)]
-enum TowerOptions {
-    #[default]
-    Charmander,
-    Gastly,
-}
-
-#[derive(Resource, Default)]
-pub struct CurrentTower {
-    tower_option: TowerOptions,
 }
 
 pub struct GamePlugin;
 
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((InputManagerPlugin::<PlayerAction>::default(), CameraPlugin))
+        app.init_state::<GamePlayState>()
+            .add_plugins((
+                InputManagerPlugin::<PlayerAction>::default(),
+                CameraPlugin,
+                PlacementPlugin,
+                WavePlugin,
+            ))
             .init_resource::<ActionState<PlayerAction>>()
             .insert_resource(PlayerAction::default_input_map())
-            .insert_resource(CurrentTower::default())
             .add_systems(OnEnter(GameState::Game), setup)
             .add_systems(
                 Update,
-                (control_placeholder, toggle_placeholder_type, place_tower)
-                    .run_if(in_state(GameState::Game)),
+                (start_wave, end_wave).run_if(in_state(GameState::Game)),
             );
     }
 }
@@ -75,34 +82,21 @@ impl PlayerAction {
         input_map.insert_dual_axis(Self::MoveCamera, GamepadStick::LEFT);
         input_map.insert_dual_axis(Self::MovePlaceholderTower, GamepadStick::RIGHT);
         input_map.insert(Self::ToggleTowerType, GamepadButtonType::East);
-        input_map.insert(Self::Place, GamepadButtonType::South);
+        input_map.insert(Self::PlaceTower, GamepadButtonType::South);
+        input_map.insert(Self::EndPlacement, GamepadButtonType::West);
 
         // Default kbm input bindings
         input_map.insert_dual_axis(Self::MoveCamera, KeyboardVirtualDPad::WASD);
         input_map.insert_dual_axis(Self::MovePlaceholderTower, KeyboardVirtualDPad::ARROW_KEYS);
         input_map.insert(Self::ToggleTowerType, KeyCode::KeyT);
-        input_map.insert(Self::Place, KeyCode::Space);
+        input_map.insert(Self::PlaceTower, KeyCode::Space);
+        input_map.insert(Self::EndPlacement, KeyCode::Enter);
 
         input_map
     }
 }
 
-#[derive(Reflect, Component, Default)]
-#[reflect(Component)]
-struct TowerPlaceholder;
-
-#[derive(Reflect, Component, Default)]
-#[reflect(Component)]
-struct Tower;
-
-fn setup(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    assets_gltfmesh: Res<Assets<GltfMesh>>,
-    assets_gltf: Res<GltfAssets>,
-    res: Res<Assets<Gltf>>,
-    current_tower: Res<CurrentTower>,
-) {
+fn setup(mut commands: Commands) {
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
             illuminance: light_consts::lux::OVERCAST_DAY,
@@ -116,104 +110,36 @@ fn setup(
         },
         ..default()
     });
-
-    // spawn square placeholder for tower
-    let placeholder_mesh = meshes.add(Circle::new(1.0));
-    let placeholder_tower = match current_tower.tower_option {
-        TowerOptions::Charmander => res.get(&assets_gltf.charmander).unwrap(),
-        TowerOptions::Gastly => res.get(&assets_gltf.gastly).unwrap(),
-    };
-    let placeholder_tower_mesh = assets_gltfmesh.get(&placeholder_tower.meshes[0]).unwrap();
-    commands
-        .spawn((
-            PbrBundle {
-                mesh: placeholder_tower_mesh.primitives[0].mesh.clone(),
-                material: placeholder_tower.materials[0].clone(),
-                transform: Transform::default().with_rotation(
-                    Quat::from_rotation_x(PI / 2.).mul_quat(Quat::from_rotation_z(PI)),
-                ),
-                ..default()
-            },
-            TowerPlaceholder,
-        ))
-        .with_children(|parent| {
-            parent.spawn(PbrBundle {
-                mesh: placeholder_mesh,
-                transform: Transform::from_rotation(Quat::from_rotation_x(
-                    -std::f32::consts::FRAC_PI_2,
-                )),
-                ..default()
-            });
-        });
 }
 
-fn control_placeholder(
-    time: Res<Time>,
-    action_state: Res<ActionState<PlayerAction>>,
-    mut query: Query<&mut Transform, With<TowerPlaceholder>>,
-) {
-    let mut player_transform = query.single_mut();
-    let move_delta = time.delta_seconds()
-        * action_state
-            .clamped_axis_pair(&PlayerAction::MovePlaceholderTower)
-            .xy();
-    player_transform.translation += Vec3::new(move_delta.x, 0.0, -move_delta.y);
+#[derive(Default, Component)]
+struct Wave {
+    timer: Timer,
 }
 
-fn toggle_placeholder_type(
+fn start_wave(
     action_state: Res<ActionState<PlayerAction>>,
-    mut current_tower: ResMut<CurrentTower>,
-    assets_gltfmesh: Res<Assets<GltfMesh>>,
-    assets_gltf: Res<GltfAssets>,
-    res: Res<Assets<Gltf>>,
-    mut query: Query<(&mut Handle<Mesh>, &mut Handle<StandardMaterial>), With<TowerPlaceholder>>,
+    mut next_state: ResMut<NextState<GamePlayState>>,
+    mut commands: Commands,
 ) {
-    if action_state.just_pressed(&PlayerAction::ToggleTowerType) {
-        info!("Toggling tower type");
-        current_tower.tower_option = match current_tower.tower_option {
-            TowerOptions::Charmander => TowerOptions::Gastly,
-            TowerOptions::Gastly => TowerOptions::Charmander,
-        };
-        let placeholder_tower = match current_tower.tower_option {
-            TowerOptions::Charmander => res.get(&assets_gltf.charmander).unwrap(),
-            TowerOptions::Gastly => res.get(&assets_gltf.gastly).unwrap(),
-        };
-        let placeholder_tower_mesh = assets_gltfmesh.get(&placeholder_tower.meshes[0]).unwrap();
-        let (mut mesh, mut mat) = query.single_mut();
-        *mesh = placeholder_tower_mesh.primitives[0].mesh.clone();
-        *mat = placeholder_tower.materials[0].clone();
+    if action_state.just_pressed(&PlayerAction::EndPlacement) {
+        next_state.set(GamePlayState::Wave);
+        commands.spawn((Wave {
+            timer: Timer::from_seconds(10.0, TimerMode::Once),
+        },));
     }
 }
 
-fn place_tower(
-    action_state: Res<ActionState<PlayerAction>>,
-    mut commands: Commands,
-    res: Res<Assets<Gltf>>,
-    assets_gltf: Res<GltfAssets>,
-    assets_gltfmesh: Res<Assets<GltfMesh>>,
-    current_tower: Res<CurrentTower>,
-    placeholder_query: Query<&Transform, With<TowerPlaceholder>>,
+fn end_wave(
+    mut next_state: ResMut<NextState<GamePlayState>>,
+    time: Res<Time>,
+    mut query: Query<&mut Wave>,
 ) {
-    let placeholder_transform = placeholder_query.single();
-    if action_state.just_pressed(&PlayerAction::Place) {
-        let placeholder_tower = match current_tower.tower_option {
-            TowerOptions::Charmander => res.get(&assets_gltf.charmander).unwrap(),
-            TowerOptions::Gastly => res.get(&assets_gltf.gastly).unwrap(),
-        };
-        let placeholder_tower_mesh = assets_gltfmesh.get(&placeholder_tower.meshes[0]).unwrap();
-
-        commands.spawn((
-            PbrBundle {
-                mesh: placeholder_tower_mesh.primitives[0].mesh.clone(),
-                material: placeholder_tower.materials[0].clone(),
-                transform: placeholder_transform.clone(),
-                ..default()
-            },
-            AsyncSceneCollider {
-                shape: Some(ComputedColliderShape::TriMesh),
-                ..Default::default()
-            },
-            Tower,
-        ));
+    for mut wave in query.iter_mut() {
+        wave.timer.tick(time.delta());
+        if wave.timer.finished() {
+            // && enemies are dead
+            next_state.set(GamePlayState::Placement);
+        }
     }
 }
