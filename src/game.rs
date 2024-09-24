@@ -2,16 +2,18 @@ mod camera;
 mod placement;
 mod wave;
 
-use std::f32::consts::PI;
-
 use super::GameState;
+use bevy::ecs::system::SystemState;
 use bevy::gltf::Gltf;
 use bevy::prelude::*;
 use bevy_asset_loader::prelude::*;
+use bevy_common_assets::ron::RonAssetPlugin;
 use camera::CameraPlugin;
 use leafwing_input_manager::prelude::*;
 use placement::PlacementPlugin;
-use wave::WavePlugin;
+use std::collections::HashMap;
+use std::f32::consts::PI;
+use wave::{EnemyDetails, WavePlugin};
 
 // Enum that will be used as a state for the gameplay loop
 #[derive(Clone, Eq, PartialEq, Debug, Hash, Default, States)]
@@ -42,14 +44,159 @@ impl Actionlike for PlayerAction {
     }
 }
 
+#[derive(Resource, Debug)]
+pub struct Resources {
+    towers: Vec<AssetId<TowerDetails>>,
+    current_tower: usize,
+}
+
+impl FromWorld for Resources {
+    fn from_world(world: &mut World) -> Self {
+        let mut system_state = SystemState::<Res<Assets<TowerDetails>>>::new(world);
+        let tower_assets = system_state.get(world);
+        let towers = tower_assets.iter().map(|(id, _)| id.clone()).collect();
+        Resources {
+            towers,
+            current_tower: 0,
+        }
+    }
+}
+
+/// Representation of a loaded tower file.
+#[derive(Asset, Debug, TypePath, Default)]
+pub struct TowerDetails {
+    // pub name: String,
+    // pub cost: u32,
+    // pub range: f32,
+    // pub damage: u32,
+    // pub rate_of_fire: f32,
+    pub model: Handle<Gltf>,
+}
+
+#[derive(serde::Deserialize, Debug, Clone)]
+enum CustomDynamicAsset {
+    Tower {
+        name: String,
+        cost: u32,
+        range: f32,
+        damage: u32,
+        rate_of_fire: f32,
+        model: String,
+    },
+    Enemy {
+        name: String,
+        health: u32,
+        speed: f32,
+        model: String,
+    },
+}
+
+impl DynamicAsset for CustomDynamicAsset {
+    // At this point, the content of your dynamic asset file is done loading.
+    // You should return untyped handles to any assets that need to finish loading for your
+    // dynamic asset to be ready.
+    fn load(&self, asset_server: &AssetServer) -> Vec<UntypedHandle> {
+        match self {
+            CustomDynamicAsset::Tower { model, .. } => {
+                vec![asset_server.load::<Gltf>(model).untyped()]
+            }
+            CustomDynamicAsset::Enemy { model, .. } => {
+                vec![asset_server.load::<Gltf>(model).untyped()]
+            }
+        }
+    }
+
+    // This method is called when all asset handles returned from `load` are done loading.
+    // The handles that you return, should also be loaded.
+    fn build(&self, world: &mut World) -> Result<DynamicAssetType, anyhow::Error> {
+        match self {
+            CustomDynamicAsset::Tower {
+                name,
+                cost,
+                range,
+                damage,
+                rate_of_fire,
+                model,
+            } => {
+                info!(
+                    "Building tower: {} with cost: {}, range: {}, damage: {}, rate_of_fire: {}",
+                    name, cost, range, damage, rate_of_fire
+                );
+                let mut gltf_system_state = SystemState::<Res<AssetServer>>::new(world);
+                let asset_server = gltf_system_state.get(world);
+                let handle: Handle<Gltf> = asset_server.load(model);
+
+                let mut towers_system_state =
+                    SystemState::<ResMut<Assets<TowerDetails>>>::new(world);
+                let mut towers = towers_system_state.get_mut(world);
+                Ok(DynamicAssetType::Single(
+                    towers
+                        .add(TowerDetails {
+                            // name: name.clone(),
+                            // cost: *cost,
+                            // range: *range,
+                            // damage: *damage,
+                            // rate_of_fire: *rate_of_fire,
+                            model: handle,
+                        })
+                        .untyped(),
+                ))
+            }
+            CustomDynamicAsset::Enemy {
+                name,
+                health,
+                speed,
+                model,
+            } => {
+                info!(
+                    "Building enemy: {} with health: {}, speed: {}",
+                    name, health, speed
+                );
+                let mut gltf_system_state = SystemState::<Res<AssetServer>>::new(world);
+                let asset_server = gltf_system_state.get(world);
+                let handle = asset_server.load(model);
+
+                let mut enemies_system_state =
+                    SystemState::<ResMut<Assets<EnemyDetails>>>::new(world);
+                let mut enemies = enemies_system_state.get_mut(world);
+                Ok(DynamicAssetType::Single(
+                    enemies
+                        .add(EnemyDetails {
+                            // name: name.clone(),
+                            // health: *health,
+                            // speed: *speed,
+                            model: handle,
+                        })
+                        .untyped(),
+                ))
+            }
+        }
+    }
+}
+
+#[derive(serde::Deserialize, Asset, TypePath)]
+pub struct AssetCollections(HashMap<String, CustomDynamicAsset>);
+
+impl DynamicAssetCollection for AssetCollections {
+    fn register(&self, dynamic_assets: &mut DynamicAssets) {
+        for (key, asset) in self.0.iter() {
+            dynamic_assets.register_asset(key, Box::new(asset.clone()));
+        }
+    }
+}
+
 #[derive(AssetCollection, Resource)]
-pub struct GltfAssets {
-    #[asset(path = "models/sv-charmander.glb")]
-    pub charmander: Handle<Gltf>,
-    #[asset(path = "models/sv-diglett.glb")]
-    pub diglett: Handle<Gltf>,
-    #[asset(path = "models/sv-gastly.glb")]
-    pub gastly: Handle<Gltf>,
+pub struct TowerAssets {
+    #[asset(key = "charmander")]
+    pub charmander: Handle<TowerDetails>,
+    #[asset(key = "gastly")]
+    pub gastly: Handle<TowerDetails>,
+}
+
+#[derive(AssetCollection, Resource)]
+pub struct EnemyAssets {
+    #[asset(key = "diglett")]
+    pub diglett: Handle<EnemyDetails>,
 }
 
 pub struct GamePlugin;
@@ -62,7 +209,10 @@ impl Plugin for GamePlugin {
                 CameraPlugin,
                 PlacementPlugin,
                 WavePlugin,
+                RonAssetPlugin::<AssetCollections>::new(&["game.ron"]),
             ))
+            .init_resource::<Assets<TowerDetails>>()
+            .init_resource::<Assets<EnemyDetails>>()
             .init_resource::<ActionState<PlayerAction>>()
             .insert_resource(PlayerAction::default_input_map())
             .add_systems(OnEnter(GameState::Game), setup)

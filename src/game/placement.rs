@@ -6,32 +6,19 @@ use leafwing_input_manager::prelude::ActionState;
 
 use crate::GameState;
 
-use super::{GamePlayState, GltfAssets, PlayerAction};
+use super::{GamePlayState, PlayerAction, Resources, TowerDetails};
 
 pub struct PlacementPlugin;
 
 impl Plugin for PlacementPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(CurrentTower::default())
-            .add_systems(OnEnter(GameState::Game), setup)
+        app.add_systems(OnEnter(GameState::Game), setup)
             .add_systems(
                 Update,
                 (control_placeholder, toggle_placeholder_type, place_tower)
                     .run_if(in_state(GameState::Game).and_then(in_state(GamePlayState::Placement))),
             );
     }
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Eq)]
-enum TowerOptions {
-    #[default]
-    Charmander,
-    Gastly,
-}
-
-#[derive(Resource, Default)]
-pub struct CurrentTower {
-    tower_option: TowerOptions,
 }
 
 #[derive(Reflect, Component, Default)]
@@ -46,22 +33,25 @@ fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     assets_gltfmesh: Res<Assets<GltfMesh>>,
-    assets_gltf: Res<GltfAssets>,
+    assets_towers: Res<Assets<TowerDetails>>,
     res: Res<Assets<Gltf>>,
-    current_tower: Res<CurrentTower>,
+    tower: Res<Resources>,
 ) {
-    // spawn square placeholder for tower
+    // spawn circle placeholder for tower
     let placeholder_mesh = meshes.add(Circle::new(1.0));
-    let placeholder_tower = match current_tower.tower_option {
-        TowerOptions::Charmander => res.get(&assets_gltf.charmander).unwrap(),
-        TowerOptions::Gastly => res.get(&assets_gltf.gastly).unwrap(),
-    };
-    let placeholder_tower_mesh = assets_gltfmesh.get(&placeholder_tower.meshes[0]).unwrap();
+
+    // spawn tower placeholder
+    let tower = assets_towers
+        .get(tower.towers[tower.current_tower])
+        .unwrap();
+    let tower_mesh = res.get(&tower.model).unwrap();
+    let tower_mesh_mesh = assets_gltfmesh.get(&tower_mesh.meshes[0]).unwrap();
+
     commands
         .spawn((
             PbrBundle {
-                mesh: placeholder_tower_mesh.primitives[0].mesh.clone(),
-                material: placeholder_tower.materials[0].clone(),
+                mesh: tower_mesh_mesh.primitives[0].mesh.clone(),
+                material: tower_mesh.materials[0].clone(),
                 transform: Transform::default().with_rotation(
                     Quat::from_rotation_x(PI / 2.).mul_quat(Quat::from_rotation_z(PI)),
                 ),
@@ -95,49 +85,49 @@ fn control_placeholder(
 
 fn toggle_placeholder_type(
     action_state: Res<ActionState<PlayerAction>>,
-    mut current_tower: ResMut<CurrentTower>,
+    mut current_tower: ResMut<Resources>,
     assets_gltfmesh: Res<Assets<GltfMesh>>,
-    assets_gltf: Res<GltfAssets>,
+    assets_towers: Res<Assets<TowerDetails>>,
     res: Res<Assets<Gltf>>,
     mut query: Query<(&mut Handle<Mesh>, &mut Handle<StandardMaterial>), With<TowerPlaceholder>>,
 ) {
     if action_state.just_pressed(&PlayerAction::ToggleTowerType) {
-        current_tower.tower_option = match current_tower.tower_option {
-            TowerOptions::Charmander => TowerOptions::Gastly,
-            TowerOptions::Gastly => TowerOptions::Charmander,
-        };
-        let placeholder_tower = match current_tower.tower_option {
-            TowerOptions::Charmander => res.get(&assets_gltf.charmander).unwrap(),
-            TowerOptions::Gastly => res.get(&assets_gltf.gastly).unwrap(),
-        };
-        let placeholder_tower_mesh = assets_gltfmesh.get(&placeholder_tower.meshes[0]).unwrap();
+        current_tower.current_tower =
+            (current_tower.current_tower + 1) % current_tower.towers.len();
+
+        let placeholder_tower_id = current_tower.towers[current_tower.current_tower];
+        let placeholder_tower = &assets_towers.get(placeholder_tower_id).unwrap().model;
+        let placeholder_tower_gltf = res.get(placeholder_tower).unwrap();
+        let placeholder_tower_mesh = assets_gltfmesh
+            .get(&placeholder_tower_gltf.meshes[0])
+            .unwrap();
         let (mut mesh, mut mat) = query.single_mut();
         *mesh = placeholder_tower_mesh.primitives[0].mesh.clone();
-        *mat = placeholder_tower.materials[0].clone();
+        *mat = placeholder_tower_gltf.materials[0].clone();
     }
 }
 
 fn place_tower(
     action_state: Res<ActionState<PlayerAction>>,
     mut commands: Commands,
+    assets_towers: Res<Assets<TowerDetails>>,
     res: Res<Assets<Gltf>>,
-    assets_gltf: Res<GltfAssets>,
     assets_gltfmesh: Res<Assets<GltfMesh>>,
-    current_tower: Res<CurrentTower>,
+    current_tower: Res<Resources>,
     placeholder_query: Query<&Transform, With<TowerPlaceholder>>,
 ) {
     let placeholder_transform = placeholder_query.single();
     if action_state.just_pressed(&PlayerAction::PlaceTower) {
-        let placeholder_tower = match current_tower.tower_option {
-            TowerOptions::Charmander => res.get(&assets_gltf.charmander).unwrap(),
-            TowerOptions::Gastly => res.get(&assets_gltf.gastly).unwrap(),
-        };
-        let placeholder_tower_mesh = assets_gltfmesh.get(&placeholder_tower.meshes[0]).unwrap();
+        let placeholder_tower = assets_towers
+            .get(current_tower.towers[current_tower.current_tower])
+            .unwrap();
+        let tower_mesh = res.get(&placeholder_tower.model).unwrap();
+        let tower_mesh_mesh = assets_gltfmesh.get(&tower_mesh.meshes[0]).unwrap();
 
         commands.spawn((
             PbrBundle {
-                mesh: placeholder_tower_mesh.primitives[0].mesh.clone(),
-                material: placeholder_tower.materials[0].clone(),
+                mesh: tower_mesh_mesh.primitives[0].mesh.clone(),
+                material: tower_mesh.materials[0].clone(),
                 transform: placeholder_transform.clone(),
                 ..default()
             },

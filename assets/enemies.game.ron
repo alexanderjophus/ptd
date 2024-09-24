@@ -1,0 +1,8 @@
+({
+    "diglett": Enemy (
+        name: "Diglett",
+        health: 10,
+        speed: 1,
+        model: "models/sv-diglett.glb",
+    ),
+})

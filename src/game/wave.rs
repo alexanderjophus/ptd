@@ -4,7 +4,7 @@ use bevy::{gltf::GltfMesh, prelude::*};
 
 use crate::GameState;
 
-use super::{GamePlayState, GltfAssets};
+use super::{EnemyAssets, GamePlayState};
 
 pub struct WavePlugin;
 
@@ -31,14 +31,26 @@ pub struct Enemy {
     speed: f32,
 }
 
+/// Representation of a loaded enemy file.
+#[derive(Asset, Debug, TypePath)]
+pub struct EnemyDetails {
+    // pub name: String,
+    // pub health: u32,
+    // pub speed: f32,
+    pub model: Handle<Gltf>,
+}
+
 fn spawn_enemy_spawner(
     mut commands: Commands,
+    assets_enemies: Res<Assets<EnemyDetails>>,
     assets_gltfmesh: Res<Assets<GltfMesh>>,
-    assets_gltf: Res<GltfAssets>,
+    assets_gltf: Res<EnemyAssets>,
     res: Res<Assets<Gltf>>,
 ) {
-    let enemy_mesh = res.get(&assets_gltf.diglett).unwrap();
+    let enemy = assets_enemies.get(&assets_gltf.diglett).unwrap();
+    let enemy_mesh = res.get(&enemy.model).unwrap();
     let enemy_mesh_mesh = assets_gltfmesh.get(&enemy_mesh.meshes[0]).unwrap();
+
     commands.spawn((
         PbrBundle {
             mesh: enemy_mesh_mesh.primitives[0].mesh.clone(),
@@ -56,8 +68,9 @@ fn spawn_enemy_spawner(
 
 fn spawn_enemy(
     mut commands: Commands,
+    assets_enemies: Res<Assets<EnemyDetails>>,
     assets_gltfmesh: Res<Assets<GltfMesh>>,
-    assets_gltf: Res<GltfAssets>,
+    assets_gltf: Res<EnemyAssets>,
     res: Res<Assets<Gltf>>,
     time: Res<Time>,
     mut query: Query<(&mut EnemySpawner, &Transform)>,
@@ -65,8 +78,10 @@ fn spawn_enemy(
     for (mut spawner, transform) in query.iter_mut() {
         spawner.timer.tick(time.delta());
         if spawner.timer.finished() {
-            let enemy_mesh = res.get(&assets_gltf.diglett).unwrap();
+            let enemy = assets_enemies.get(&assets_gltf.diglett).unwrap();
+            let enemy_mesh = res.get(&enemy.model).unwrap();
             let enemy_mesh_mesh = assets_gltfmesh.get(&enemy_mesh.meshes[0]).unwrap();
+
             commands.spawn((
                 PbrBundle {
                     mesh: enemy_mesh_mesh.primitives[0].mesh.clone(),

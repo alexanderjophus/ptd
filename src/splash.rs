@@ -1,8 +1,9 @@
 use bevy::prelude::*;
 use bevy_asset_loader::prelude::*;
 
+use crate::game::{AssetCollections, EnemyAssets, Resources, TowerAssets};
+
 use super::{despawn_screen, GameState, GAME_NAME};
-use crate::game::GltfAssets;
 
 pub struct SplashPlugin;
 
@@ -12,7 +13,12 @@ impl Plugin for SplashPlugin {
         app.add_loading_state(
             LoadingState::new(GameState::Splash)
                 .continue_to_state(GameState::Menu)
-                .load_collection::<GltfAssets>(),
+                .load_collection::<TowerAssets>()
+                .load_collection::<EnemyAssets>()
+                .register_dynamic_asset_collection::<AssetCollections>()
+                .with_dynamic_assets_file::<AssetCollections>("towers.game.ron")
+                .with_dynamic_assets_file::<AssetCollections>("enemies.game.ron")
+                .init_resource::<Resources>(),
         )
         // When entering the state, spawn everything needed for this screen
         .add_systems(OnEnter(GameState::Splash), splash_setup)
