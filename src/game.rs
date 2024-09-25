@@ -279,7 +279,7 @@ fn start_wave(
     if action_state.just_pressed(&PlayerAction::EndPlacement) {
         next_state.set(GamePlayState::Wave);
         commands.spawn((Wave {
-            timer: Timer::from_seconds(10.0, TimerMode::Once),
+            timer: Timer::from_seconds(20.0, TimerMode::Once),
         },));
     }
 }

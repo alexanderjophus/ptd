@@ -3,9 +3,9 @@
         name: "Charmander",
         cost: 10,
         range: 5.0,
-        damage: 10,
-        rate_of_fire: 2.0,
-        projectile_speed: 5.0,
+        damage: 3,
+        rate_of_fire: 5.0,
+        projectile_speed: 25.0,
         model: "models/sv-charmander.glb",
     ),
     "gastly": Tower (
@@ -14,7 +14,7 @@
         range: 5.0,
         damage: 20,
         rate_of_fire: 1.0,
-        projectile_speed: 5.0,
+        projectile_speed: 25.0,
         model: "models/sv-gastly.glb",
     ),
 })

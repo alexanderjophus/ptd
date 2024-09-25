@@ -114,7 +114,7 @@ fn spawn_enemy(
 
 fn move_enemy(mut query: Query<(&Enemy, &mut Transform)>) {
     for (enemy, mut transform) in query.iter_mut() {
-        transform.translation.z += enemy.speed;
+        transform.translation.z += enemy.speed / 100.0;
         // base rotate off of z translation
         transform.rotation = Quat::from_rotation_z((transform.translation.z * 2.0).sin() / 2.0)
             .mul_quat(Quat::from_rotation_x(std::f32::consts::FRAC_PI_2));

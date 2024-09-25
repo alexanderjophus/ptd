@@ -1,8 +1,8 @@
 ({
     "diglett": Enemy (
         name: "Diglett",
-        health: 10,
-        speed: 0.05,
+        health: 15,
+        speed: 5,
         model: "models/sv-diglett.glb",
     ),
 })
