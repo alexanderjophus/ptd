@@ -14,7 +14,6 @@ bevy_asset_loader = { version = "0.21.0", features = [
 ] }
 bevy_egui = "0.28.0"
 bevy-inspector-egui = "0.25.2"
-bevy_rapier3d = "0.27.0"
 leafwing-input-manager = "0.15.0"
 bevy_infinite_grid = "0.13.0"
 bevy_common_assets = { version = "0.11.0", features = ["ron"] }

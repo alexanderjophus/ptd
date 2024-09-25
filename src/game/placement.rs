@@ -1,7 +1,6 @@
 use std::f32::consts::PI;
 
 use bevy::{gltf::GltfMesh, prelude::*};
-use bevy_rapier3d::prelude::*;
 use leafwing_input_manager::prelude::ActionState;
 
 use crate::GameState;
@@ -23,7 +22,23 @@ impl Plugin for PlacementPlugin {
 
 #[derive(Reflect, Component, Default)]
 #[reflect(Component)]
-struct Tower;
+pub struct Tower {
+    pub name: String,
+    pub cost: u32,
+    pub range: f32,
+    pub damage: u32,
+    pub projectile_speed: f32,
+    pub attack_speed: Timer,
+}
+
+#[derive(Reflect, Component)]
+#[reflect(Component)]
+pub struct Projectile {
+    pub speed: f32,
+    pub damage: u32,
+    pub target: Entity,
+    pub lifetime: Timer,
+}
 
 #[derive(Reflect, Component, Default)]
 #[reflect(Component)]
@@ -131,11 +146,17 @@ fn place_tower(
                 transform: placeholder_transform.clone(),
                 ..default()
             },
-            AsyncSceneCollider {
-                shape: Some(ComputedColliderShape::TriMesh),
-                ..Default::default()
+            Tower {
+                name: placeholder_tower.name.clone(),
+                cost: placeholder_tower.cost,
+                range: placeholder_tower.range,
+                damage: placeholder_tower.damage,
+                projectile_speed: placeholder_tower.projectile_speed,
+                attack_speed: Timer::from_seconds(
+                    1. / placeholder_tower.rate_of_fire,
+                    TimerMode::Repeating,
+                ),
             },
-            Tower,
         ));
     }
 }

@@ -2,7 +2,7 @@
     "diglett": Enemy (
         name: "Diglett",
         health: 10,
-        speed: 1,
+        speed: 0.05,
         model: "models/sv-diglett.glb",
     ),
 })

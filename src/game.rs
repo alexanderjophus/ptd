@@ -15,6 +15,30 @@ use std::collections::HashMap;
 use std::f32::consts::PI;
 use wave::{EnemyDetails, WavePlugin};
 
+pub struct GamePlugin;
+
+impl Plugin for GamePlugin {
+    fn build(&self, app: &mut App) {
+        app.init_state::<GamePlayState>()
+            .add_plugins((
+                InputManagerPlugin::<PlayerAction>::default(),
+                CameraPlugin,
+                PlacementPlugin,
+                WavePlugin,
+                RonAssetPlugin::<AssetCollections>::new(&["game.ron"]),
+            ))
+            .init_resource::<Assets<TowerDetails>>()
+            .init_resource::<Assets<EnemyDetails>>()
+            .init_resource::<ActionState<PlayerAction>>()
+            .insert_resource(PlayerAction::default_input_map())
+            .add_systems(OnEnter(GameState::Game), setup)
+            .add_systems(
+                Update,
+                (start_wave, end_wave).run_if(in_state(GameState::Game)),
+            );
+    }
+}
+
 // Enum that will be used as a state for the gameplay loop
 #[derive(Clone, Eq, PartialEq, Debug, Hash, Default, States)]
 enum GamePlayState {
@@ -65,11 +89,12 @@ impl FromWorld for Resources {
 /// Representation of a loaded tower file.
 #[derive(Asset, Debug, TypePath, Default)]
 pub struct TowerDetails {
-    // pub name: String,
-    // pub cost: u32,
-    // pub range: f32,
-    // pub damage: u32,
-    // pub rate_of_fire: f32,
+    pub name: String,
+    pub cost: u32,
+    pub range: f32,
+    pub damage: u32,
+    pub rate_of_fire: f32,
+    pub projectile_speed: f32,
     pub model: Handle<Gltf>,
 }
 
@@ -81,6 +106,7 @@ enum CustomDynamicAsset {
         range: f32,
         damage: u32,
         rate_of_fire: f32,
+        projectile_speed: f32,
         model: String,
     },
     Enemy {
@@ -116,6 +142,7 @@ impl DynamicAsset for CustomDynamicAsset {
                 range,
                 damage,
                 rate_of_fire,
+                projectile_speed,
                 model,
             } => {
                 info!(
@@ -132,11 +159,12 @@ impl DynamicAsset for CustomDynamicAsset {
                 Ok(DynamicAssetType::Single(
                     towers
                         .add(TowerDetails {
-                            // name: name.clone(),
-                            // cost: *cost,
-                            // range: *range,
-                            // damage: *damage,
-                            // rate_of_fire: *rate_of_fire,
+                            name: name.clone(),
+                            cost: *cost,
+                            range: *range,
+                            damage: *damage,
+                            rate_of_fire: *rate_of_fire,
+                            projectile_speed: *projectile_speed,
                             model: handle,
                         })
                         .untyped(),
@@ -162,9 +190,9 @@ impl DynamicAsset for CustomDynamicAsset {
                 Ok(DynamicAssetType::Single(
                     enemies
                         .add(EnemyDetails {
-                            // name: name.clone(),
-                            // health: *health,
-                            // speed: *speed,
+                            name: name.clone(),
+                            health: *health,
+                            speed: *speed,
                             model: handle,
                         })
                         .untyped(),
@@ -197,30 +225,6 @@ pub struct TowerAssets {
 pub struct EnemyAssets {
     #[asset(key = "diglett")]
     pub diglett: Handle<EnemyDetails>,
-}
-
-pub struct GamePlugin;
-
-impl Plugin for GamePlugin {
-    fn build(&self, app: &mut App) {
-        app.init_state::<GamePlayState>()
-            .add_plugins((
-                InputManagerPlugin::<PlayerAction>::default(),
-                CameraPlugin,
-                PlacementPlugin,
-                WavePlugin,
-                RonAssetPlugin::<AssetCollections>::new(&["game.ron"]),
-            ))
-            .init_resource::<Assets<TowerDetails>>()
-            .init_resource::<Assets<EnemyDetails>>()
-            .init_resource::<ActionState<PlayerAction>>()
-            .insert_resource(PlayerAction::default_input_map())
-            .add_systems(OnEnter(GameState::Game), setup)
-            .add_systems(
-                Update,
-                (start_wave, end_wave).run_if(in_state(GameState::Game)),
-            );
-    }
 }
 
 impl PlayerAction {
