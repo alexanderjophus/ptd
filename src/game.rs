@@ -50,7 +50,7 @@ enum GamePlayState {
 #[derive(PartialEq, Eq, Clone, Copy, Hash, Debug, Reflect)]
 enum PlayerAction {
     MoveCamera,
-    MovePlaceholderTower,
+    MoveCursorPlaceholder,
     ToggleTowerType,
     PlaceTower,
     EndPlacement,
@@ -60,7 +60,7 @@ impl Actionlike for PlayerAction {
     fn input_control_kind(&self) -> InputControlKind {
         match self {
             PlayerAction::MoveCamera => InputControlKind::DualAxis,
-            PlayerAction::MovePlaceholderTower => InputControlKind::DualAxis,
+            PlayerAction::MoveCursorPlaceholder => InputControlKind::DualAxis,
             PlayerAction::ToggleTowerType => InputControlKind::Button,
             PlayerAction::PlaceTower => InputControlKind::Button,
             PlayerAction::EndPlacement => InputControlKind::Button,
@@ -234,14 +234,14 @@ impl PlayerAction {
 
         // Default gamepad input bindings
         input_map.insert_dual_axis(Self::MoveCamera, GamepadStick::LEFT);
-        input_map.insert_dual_axis(Self::MovePlaceholderTower, GamepadStick::RIGHT);
+        input_map.insert_dual_axis(Self::MoveCursorPlaceholder, GamepadStick::RIGHT);
         input_map.insert(Self::ToggleTowerType, GamepadButtonType::East);
         input_map.insert(Self::PlaceTower, GamepadButtonType::South);
         input_map.insert(Self::EndPlacement, GamepadButtonType::West);
 
         // Default kbm input bindings
         input_map.insert_dual_axis(Self::MoveCamera, KeyboardVirtualDPad::WASD);
-        input_map.insert_dual_axis(Self::MovePlaceholderTower, KeyboardVirtualDPad::ARROW_KEYS);
+        input_map.insert_dual_axis(Self::MoveCursorPlaceholder, KeyboardVirtualDPad::ARROW_KEYS);
         input_map.insert(Self::ToggleTowerType, KeyCode::KeyT);
         input_map.insert(Self::PlaceTower, KeyCode::Space);
         input_map.insert(Self::EndPlacement, KeyCode::Enter);

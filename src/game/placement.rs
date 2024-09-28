@@ -7,6 +7,8 @@ use crate::GameState;
 
 use super::{GamePlayState, PlayerAction, Resources, TowerDetails};
 
+const SNAP_OFFSET: f32 = 0.5;
+
 pub struct PlacementPlugin;
 
 impl Plugin for PlacementPlugin {
@@ -14,7 +16,12 @@ impl Plugin for PlacementPlugin {
         app.add_systems(OnEnter(GameState::Game), setup)
             .add_systems(
                 Update,
-                (control_placeholder, toggle_placeholder_type, place_tower)
+                (
+                    control_cursor,
+                    placeholder_snap_to_cursor,
+                    toggle_placeholder_type,
+                    place_tower,
+                )
                     .run_if(in_state(GameState::Game).and_then(in_state(GamePlayState::Placement))),
             );
     }
@@ -44,6 +51,10 @@ pub struct Projectile {
 #[reflect(Component)]
 struct TowerPlaceholder;
 
+#[derive(Reflect, Component, Default)]
+#[reflect(Component)]
+struct CursorPlaceholder;
+
 fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -53,7 +64,7 @@ fn setup(
     tower: Res<Resources>,
 ) {
     // spawn circle placeholder for tower
-    let placeholder_mesh = meshes.add(Circle::new(1.0));
+    let placeholder_mesh = meshes.add(Circle::new(0.5));
 
     // spawn tower placeholder
     let tower = assets_towers
@@ -62,40 +73,63 @@ fn setup(
     let tower_mesh = res.get(&tower.model).unwrap();
     let tower_mesh_mesh = assets_gltfmesh.get(&tower_mesh.meshes[0]).unwrap();
 
-    commands
-        .spawn((
-            PbrBundle {
-                mesh: tower_mesh_mesh.primitives[0].mesh.clone(),
-                material: tower_mesh.materials[0].clone(),
-                transform: Transform::default().with_rotation(
-                    Quat::from_rotation_x(PI / 2.).mul_quat(Quat::from_rotation_z(PI)),
-                ),
-                ..default()
-            },
-            TowerPlaceholder,
-        ))
-        .with_children(|parent| {
-            parent.spawn(PbrBundle {
-                mesh: placeholder_mesh,
-                transform: Transform::from_rotation(Quat::from_rotation_x(
-                    -std::f32::consts::FRAC_PI_2,
-                )),
-                ..default()
-            });
-        });
+    commands.spawn((
+        PbrBundle {
+            mesh: tower_mesh_mesh.primitives[0].mesh.clone(),
+            material: tower_mesh.materials[0].clone(),
+            transform: Transform::default()
+                .with_rotation(Quat::from_rotation_x(PI / 2.).mul_quat(Quat::from_rotation_z(PI))),
+            ..default()
+        },
+        TowerPlaceholder,
+    ));
+    commands.spawn((
+        PbrBundle {
+            mesh: placeholder_mesh,
+            transform: Transform::default()
+                .with_translation(Vec3::new(SNAP_OFFSET, 0.0, SNAP_OFFSET))
+                .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
+            ..default()
+        },
+        CursorPlaceholder,
+    ));
 }
 
-fn control_placeholder(
+fn control_cursor(
     time: Res<Time>,
     action_state: Res<ActionState<PlayerAction>>,
-    mut query: Query<&mut Transform, With<TowerPlaceholder>>,
+    mut query: Query<&mut Transform, With<CursorPlaceholder>>,
 ) {
     let mut player_transform = query.single_mut();
     let move_delta = time.delta_seconds()
         * action_state
-            .clamped_axis_pair(&PlayerAction::MovePlaceholderTower)
+            .clamped_axis_pair(&PlayerAction::MoveCursorPlaceholder)
             .xy();
     player_transform.translation += Vec3::new(move_delta.x, 0.0, -move_delta.y);
+}
+
+// snaps the tower placeholder to the nearest spot on the grid to the cursor
+fn placeholder_snap_to_cursor(
+    mut placeholder_query: Query<
+        &mut Transform,
+        (With<TowerPlaceholder>, Without<CursorPlaceholder>),
+    >,
+    cursor_query: Query<&mut Transform, (With<CursorPlaceholder>, Without<TowerPlaceholder>)>,
+) {
+    let cursor_transform = cursor_query.single();
+    let cursor_position = cursor_transform.translation;
+
+    let mut placeholder_transform = placeholder_query.single_mut();
+    let mut placeholder_position = placeholder_transform.translation;
+
+    let snap_distance = 1.0;
+    let snap_x = (cursor_position.x - SNAP_OFFSET / snap_distance).round() + SNAP_OFFSET;
+    let snap_z = (cursor_position.z - SNAP_OFFSET / snap_distance).round() + SNAP_OFFSET;
+
+    placeholder_position.x = snap_x;
+    placeholder_position.z = snap_z;
+
+    placeholder_transform.translation = placeholder_position;
 }
 
 fn toggle_placeholder_type(
