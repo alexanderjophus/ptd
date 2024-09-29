@@ -102,6 +102,7 @@ fn control_cursor(
 ) {
     let mut player_transform = query.single_mut();
     let move_delta = time.delta_seconds()
+        * 2.0
         * action_state
             .clamped_axis_pair(&PlayerAction::MoveCursorPlaceholder)
             .xy();
