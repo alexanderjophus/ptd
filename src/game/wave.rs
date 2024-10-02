@@ -6,34 +6,34 @@ use crate::GameState;
 
 use super::{
     placement::{Projectile, Tower},
-    EnemyAssets, GamePlayState,
+    EnemyAssets, GamePlayState, Goal,
 };
 
 pub struct WavePlugin;
 
 impl Plugin for WavePlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(GameState::Game), spawn_enemy_spawner)
-            .add_systems(
-                Update,
-                (
-                    spawn_enemy,
-                    move_enemy,
-                    tower_shooting,
-                    move_projectile,
-                    bullet_despawn,
-                    bullet_collision,
-                    target_death,
-                )
-                    .run_if(in_state(GamePlayState::Wave)),
-            );
+        app.add_systems(
+            Update,
+            (
+                spawn_enemy,
+                move_enemy,
+                tower_shooting,
+                move_projectile,
+                bullet_despawn,
+                bullet_collision,
+                target_death,
+                enemy_goal_collision,
+            )
+                .run_if(in_state(GameState::Game).and_then(in_state(GamePlayState::Wave))),
+        );
     }
 }
 
 #[derive(Reflect, Component, Default)]
 #[reflect(Component)]
-struct EnemySpawner {
-    timer: Timer,
+pub struct EnemySpawner {
+    pub timer: Timer,
 }
 
 #[derive(Reflect, Component, Default)]
@@ -51,32 +51,6 @@ pub struct EnemyDetails {
     pub health: u32,
     pub speed: f32,
     pub model: Handle<Gltf>,
-}
-
-fn spawn_enemy_spawner(
-    mut commands: Commands,
-    assets_enemies: Res<Assets<EnemyDetails>>,
-    assets_gltfmesh: Res<Assets<GltfMesh>>,
-    assets_gltf: Res<EnemyAssets>,
-    res: Res<Assets<Gltf>>,
-) {
-    let enemy = assets_enemies.get(&assets_gltf.diglett).unwrap();
-    let enemy_mesh = res.get(&enemy.model).unwrap();
-    let enemy_mesh_mesh = assets_gltfmesh.get(&enemy_mesh.meshes[0]).unwrap();
-
-    commands.spawn((
-        PbrBundle {
-            mesh: enemy_mesh_mesh.primitives[0].mesh.clone(),
-            material: enemy_mesh.materials[0].clone(),
-            transform: Transform::from_translation(Vec3::new(0.0, 0.0, -10.0))
-                .with_rotation(Quat::from_rotation_x(std::f32::consts::FRAC_PI_2))
-                .with_scale(Vec3::splat(4.0)),
-            ..Default::default()
-        },
-        EnemySpawner {
-            timer: Timer::new(Duration::from_secs(1), TimerMode::Repeating),
-        },
-    ));
 }
 
 fn spawn_enemy(
@@ -208,6 +182,20 @@ fn bullet_collision(
                     .checked_sub(projectile.damage)
                     .unwrap_or_default();
                 break;
+            }
+        }
+    }
+}
+
+fn enemy_goal_collision(
+    mut commands: Commands,
+    goals: Query<&Transform, With<Goal>>,
+    enemies: Query<(Entity, &Transform), With<Enemy>>,
+) {
+    for goal_transform in &goals {
+        for (entity, enemy_transform) in &enemies {
+            if Vec3::distance(goal_transform.translation, enemy_transform.translation) < 0.4 {
+                commands.entity(entity).despawn_recursive();
             }
         }
     }

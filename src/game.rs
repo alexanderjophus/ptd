@@ -3,9 +3,9 @@ mod placement;
 mod wave;
 
 use super::GameState;
-use bevy::ecs::system::SystemState;
 use bevy::gltf::Gltf;
 use bevy::prelude::*;
+use bevy::{ecs::system::SystemState, gltf::GltfMesh};
 use bevy_asset_loader::prelude::*;
 use bevy_common_assets::ron::RonAssetPlugin;
 use camera::CameraPlugin;
@@ -13,7 +13,8 @@ use leafwing_input_manager::prelude::*;
 use placement::PlacementPlugin;
 use std::collections::HashMap;
 use std::f32::consts::PI;
-use wave::{EnemyDetails, WavePlugin};
+use std::time::Duration;
+use wave::{EnemyDetails, EnemySpawner, WavePlugin};
 
 pub struct GamePlugin;
 
@@ -65,6 +66,29 @@ impl Actionlike for PlayerAction {
             PlayerAction::PlaceTower => InputControlKind::Button,
             PlayerAction::EndPlacement => InputControlKind::Button,
         }
+    }
+}
+
+impl PlayerAction {
+    /// Define the default bindings to the input
+    fn default_input_map() -> InputMap<Self> {
+        let mut input_map = InputMap::default();
+
+        // Default gamepad input bindings
+        input_map.insert_dual_axis(Self::MoveCamera, GamepadStick::LEFT);
+        input_map.insert_dual_axis(Self::MoveCursorPlaceholder, GamepadStick::RIGHT);
+        input_map.insert(Self::ToggleTowerType, GamepadButtonType::East);
+        input_map.insert(Self::PlaceTower, GamepadButtonType::South);
+        input_map.insert(Self::EndPlacement, GamepadButtonType::West);
+
+        // Default kbm input bindings
+        input_map.insert_dual_axis(Self::MoveCamera, KeyboardVirtualDPad::WASD);
+        input_map.insert_dual_axis(Self::MoveCursorPlaceholder, KeyboardVirtualDPad::ARROW_KEYS);
+        input_map.insert(Self::ToggleTowerType, KeyCode::KeyT);
+        input_map.insert(Self::PlaceTower, KeyCode::Space);
+        input_map.insert(Self::EndPlacement, KeyCode::Enter);
+
+        input_map
     }
 }
 
@@ -227,43 +251,62 @@ pub struct EnemyAssets {
     pub diglett: Handle<EnemyDetails>,
 }
 
-impl PlayerAction {
-    /// Define the default bindings to the input
-    fn default_input_map() -> InputMap<Self> {
-        let mut input_map = InputMap::default();
+#[derive(Default, Component)]
+struct Goal;
 
-        // Default gamepad input bindings
-        input_map.insert_dual_axis(Self::MoveCamera, GamepadStick::LEFT);
-        input_map.insert_dual_axis(Self::MoveCursorPlaceholder, GamepadStick::RIGHT);
-        input_map.insert(Self::ToggleTowerType, GamepadButtonType::East);
-        input_map.insert(Self::PlaceTower, GamepadButtonType::South);
-        input_map.insert(Self::EndPlacement, GamepadButtonType::West);
-
-        // Default kbm input bindings
-        input_map.insert_dual_axis(Self::MoveCamera, KeyboardVirtualDPad::WASD);
-        input_map.insert_dual_axis(Self::MoveCursorPlaceholder, KeyboardVirtualDPad::ARROW_KEYS);
-        input_map.insert(Self::ToggleTowerType, KeyCode::KeyT);
-        input_map.insert(Self::PlaceTower, KeyCode::Space);
-        input_map.insert(Self::EndPlacement, KeyCode::Enter);
-
-        input_map
-    }
-}
-
-fn setup(mut commands: Commands) {
-    commands.spawn(DirectionalLightBundle {
-        directional_light: DirectionalLight {
-            illuminance: light_consts::lux::OVERCAST_DAY,
-            shadows_enabled: true,
+fn setup(
+    mut commands: Commands,
+    assets_enemies: Res<Assets<EnemyDetails>>,
+    assets_gltfmesh: Res<Assets<GltfMesh>>,
+    mut assets_mesh: ResMut<Assets<Mesh>>,
+    assets_gltf: Res<EnemyAssets>,
+    res: Res<Assets<Gltf>>,
+) {
+    commands.spawn((
+        DirectionalLightBundle {
+            directional_light: DirectionalLight {
+                illuminance: light_consts::lux::OVERCAST_DAY,
+                shadows_enabled: true,
+                ..default()
+            },
+            transform: Transform {
+                translation: Vec3::new(0.0, 20.0, 0.0),
+                rotation: Quat::from_rotation_x(-PI / 4.),
+                ..default()
+            },
             ..default()
         },
-        transform: Transform {
-            translation: Vec3::new(0.0, 20.0, 0.0),
-            rotation: Quat::from_rotation_x(-PI / 4.),
-            ..default()
+        Name::new("Directional Light"),
+    ));
+
+    let enemy = assets_enemies.get(&assets_gltf.diglett).unwrap();
+    let enemy_mesh = res.get(&enemy.model).unwrap();
+    let enemy_mesh_mesh = assets_gltfmesh.get(&enemy_mesh.meshes[0]).unwrap();
+
+    commands.spawn((
+        PbrBundle {
+            mesh: enemy_mesh_mesh.primitives[0].mesh.clone(),
+            material: enemy_mesh.materials[0].clone(),
+            transform: Transform::from_translation(Vec3::new(0.5, 0.0, -10.0))
+                .with_rotation(Quat::from_rotation_x(std::f32::consts::FRAC_PI_2))
+                .with_scale(Vec3::splat(4.0)),
+            ..Default::default()
         },
-        ..default()
-    });
+        EnemySpawner {
+            timer: Timer::new(Duration::from_secs(1), TimerMode::Repeating),
+        },
+    ));
+
+    let goal = assets_mesh.add(Cuboid::new(1.0, 0.1, 1.0));
+    commands.spawn((
+        PbrBundle {
+            mesh: goal,
+            transform: Transform::from_translation(Vec3::new(0.5, 0.0, 3.5)),
+            ..Default::default()
+        },
+        Goal,
+        Name::new("Goal"),
+    ));
 }
 
 #[derive(Default, Component)]
