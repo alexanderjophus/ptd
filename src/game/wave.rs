@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use bevy::{gltf::GltfMesh, prelude::*};
+use vleue_navigator::prelude::*;
 
 use crate::GameState;
 
@@ -17,6 +18,7 @@ impl Plugin for WavePlugin {
             Update,
             (
                 spawn_enemy,
+                find_path,
                 move_enemy,
                 tower_shooting,
                 move_projectile,
@@ -86,12 +88,13 @@ fn spawn_enemy(
     }
 }
 
-fn move_enemy(mut query: Query<(&Enemy, &mut Transform)>) {
-    for (enemy, mut transform) in query.iter_mut() {
-        transform.translation.z += enemy.speed / 100.0;
+fn move_enemy(mut query: Query<&mut Transform, With<Enemy>>) {
+    for mut transform in query.iter_mut() {
+        info!("Transform forward: {:?}", transform.forward());
+        let forward = transform.forward();
+        transform.translation += forward * 0.01;
         // base rotate off of z translation
-        transform.rotation = Quat::from_rotation_z((transform.translation.z * 2.0).sin() / 2.0)
-            .mul_quat(Quat::from_rotation_x(std::f32::consts::FRAC_PI_2));
+        transform.rotation = Quat::from_rotation_z((transform.translation.z * 2.0).sin() / 2.0);
     }
 }
 
@@ -215,5 +218,28 @@ fn target_death(
         if let Err(_) = enemies.get(projectile.target) {
             commands.entity(ent).despawn_recursive();
         }
+    }
+}
+
+fn find_path(
+    mut navmeshes: ResMut<Assets<NavMesh>>,
+    navmesh: Query<(&Handle<NavMesh>, &NavMeshStatus)>,
+    mut from_query: Query<&mut Transform, With<Enemy>>,
+    to_query: Query<&Transform, (With<Goal>, Without<Enemy>)>,
+) {
+    let (navmesh_handle, status) = navmesh.single();
+    if *status != NavMeshStatus::Built {
+        return;
+    }
+    if let Some(navmesh) = navmeshes.get_mut(navmesh_handle) {
+        let to = to_query.single().translation;
+        from_query.iter_mut().for_each(|mut from| {
+            if let Some(path) = navmesh.path(from.translation.xz(), to.xz()) {
+                let next = path.path[0];
+                from.look_at(Vec3::new(next.x, 0.0, next.y), Vec3::Z);
+            } else {
+                warn!("no path found from {:?} to {:?}", from, to);
+            }
+        });
     }
 }

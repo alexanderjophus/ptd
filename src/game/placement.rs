@@ -5,9 +5,7 @@ use leafwing_input_manager::prelude::ActionState;
 
 use crate::GameState;
 
-use super::{GamePlayState, PlayerAction, Resources, TowerDetails};
-
-const SNAP_OFFSET: f32 = 0.5;
+use super::{GamePlayState, PlayerAction, Resources, TowerDetails, SNAP_OFFSET};
 
 pub struct PlacementPlugin;
 
@@ -49,23 +47,19 @@ pub struct Projectile {
 
 #[derive(Reflect, Component, Default)]
 #[reflect(Component)]
-struct TowerPlaceholder;
+pub struct TowerPlaceholder;
 
 #[derive(Reflect, Component, Default)]
 #[reflect(Component)]
-struct CursorPlaceholder;
+pub struct CursorPlaceholder;
 
 fn setup(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
     assets_gltfmesh: Res<Assets<GltfMesh>>,
     assets_towers: Res<Assets<TowerDetails>>,
     res: Res<Assets<Gltf>>,
     tower: Res<Resources>,
 ) {
-    // spawn circle placeholder for tower
-    let placeholder_mesh = meshes.add(Circle::new(0.5));
-
     // spawn tower placeholder
     let tower = assets_towers
         .get(tower.towers[tower.current_tower])
@@ -82,16 +76,6 @@ fn setup(
             ..default()
         },
         TowerPlaceholder,
-    ));
-    commands.spawn((
-        PbrBundle {
-            mesh: placeholder_mesh,
-            transform: Transform::default()
-                .with_translation(Vec3::new(SNAP_OFFSET, 0.0, SNAP_OFFSET))
-                .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
-            ..default()
-        },
-        CursorPlaceholder,
     ));
 }
 

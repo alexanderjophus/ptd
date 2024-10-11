@@ -3,18 +3,22 @@ mod placement;
 mod wave;
 
 use super::GameState;
-use bevy::gltf::Gltf;
 use bevy::prelude::*;
-use bevy::{ecs::system::SystemState, gltf::GltfMesh};
+use bevy::{
+    ecs::system::SystemState, gltf::Gltf, gltf::GltfMesh, math::vec2, render::primitives::Aabb,
+};
 use bevy_asset_loader::prelude::*;
 use bevy_common_assets::ron::RonAssetPlugin;
 use camera::CameraPlugin;
 use leafwing_input_manager::prelude::*;
-use placement::PlacementPlugin;
+use placement::{CursorPlaceholder, PlacementPlugin, TowerPlaceholder};
 use std::collections::HashMap;
 use std::f32::consts::PI;
 use std::time::Duration;
+use vleue_navigator::prelude::*;
 use wave::{EnemyDetails, EnemySpawner, WavePlugin};
+
+const SNAP_OFFSET: f32 = 0.5;
 
 pub struct GamePlugin;
 
@@ -27,6 +31,8 @@ impl Plugin for GamePlugin {
                 PlacementPlugin,
                 WavePlugin,
                 RonAssetPlugin::<AssetCollections>::new(&["game.ron"]),
+                VleueNavigatorPlugin,
+                NavmeshUpdaterPlugin::<Aabb, Obstacle>::default(),
             ))
             .init_resource::<Assets<TowerDetails>>()
             .init_resource::<Assets<EnemyDetails>>()
@@ -46,6 +52,16 @@ enum GamePlayState {
     #[default]
     Placement,
     Wave,
+}
+
+#[derive(Component, Debug)]
+struct Obstacle;
+
+#[derive(Component)]
+pub struct Path {
+    current: Vec2,
+    next: Vec<Vec2>,
+    target: Entity,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Hash, Debug, Reflect)]
@@ -251,15 +267,22 @@ pub struct EnemyAssets {
     pub diglett: Handle<EnemyDetails>,
 }
 
+#[derive(AssetCollection, Resource)]
+pub struct GltfAssets {
+    #[asset(path = "models/house.glb")]
+    pub house: Handle<Gltf>,
+}
+
 #[derive(Default, Component)]
 struct Goal;
 
 fn setup(
     mut commands: Commands,
-    assets_enemies: Res<Assets<EnemyDetails>>,
     assets_gltfmesh: Res<Assets<GltfMesh>>,
     mut assets_mesh: ResMut<Assets<Mesh>>,
-    assets_gltf: Res<EnemyAssets>,
+    assets_enemydetails: Res<Assets<EnemyDetails>>,
+    enemyassets: Res<EnemyAssets>,
+    gltfassets: Res<GltfAssets>,
     res: Res<Assets<Gltf>>,
 ) {
     commands.spawn((
@@ -279,7 +302,20 @@ fn setup(
         Name::new("Directional Light"),
     ));
 
-    let enemy = assets_enemies.get(&assets_gltf.diglett).unwrap();
+    // spawn circle placeholder for tower
+    let placeholder_mesh = assets_mesh.add(Circle::new(0.5));
+    commands.spawn((
+        PbrBundle {
+            mesh: placeholder_mesh,
+            transform: Transform::default()
+                .with_translation(Vec3::new(SNAP_OFFSET, 0.0, SNAP_OFFSET))
+                .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
+            ..default()
+        },
+        CursorPlaceholder,
+    ));
+
+    let enemy = assets_enemydetails.get(&enemyassets.diglett).unwrap();
     let enemy_mesh = res.get(&enemy.model).unwrap();
     let enemy_mesh_mesh = assets_gltfmesh.get(&enemy_mesh.meshes[0]).unwrap();
 
@@ -297,16 +333,39 @@ fn setup(
         },
     ));
 
-    let goal = assets_mesh.add(Cuboid::new(1.0, 0.1, 1.0));
+    let house_mesh = res.get(&gltfassets.house).unwrap();
+    let house_mesh_mats = assets_gltfmesh.get(&house_mesh.meshes[0]).unwrap();
+
     commands.spawn((
         PbrBundle {
-            mesh: goal,
-            transform: Transform::from_translation(Vec3::new(0.5, 0.0, 3.5)),
+            mesh: house_mesh_mats.primitives[0].mesh.clone(),
+            material: house_mesh.materials[0].clone(),
+            transform: Transform::from_translation(Vec3::new(-6.0, 0.0, -4.0))
+                .with_rotation(Quat::from_rotation_y(std::f32::consts::FRAC_PI_2))
+                .with_scale(Vec3::splat(0.25)),
             ..Default::default()
         },
         Goal,
         Name::new("Goal"),
     ));
+
+    commands.spawn(NavMeshBundle {
+        settings: NavMeshSettings {
+            // Define the outer borders of the navmesh.
+            fixed: Triangulation::from_outer_edges(&[
+                vec2(-20.0, -20.0),
+                vec2(20.0, -20.0),
+                vec2(20.0, 20.0),
+                vec2(-20.0, 20.0),
+            ]),
+            ..default()
+        },
+        // Mark it for update as soon as obstacles are changed.
+        // Other modes can be debounced or manually triggered.
+        update_mode: NavMeshUpdateMode::Direct,
+        // transform: Transform::from_translation(Vec3::new(-10.0, 0.0, -10.0)),
+        ..NavMeshBundle::with_default_id()
+    });
 }
 
 #[derive(Default, Component)]
@@ -318,12 +377,15 @@ fn start_wave(
     action_state: Res<ActionState<PlayerAction>>,
     mut next_state: ResMut<NextState<GamePlayState>>,
     mut commands: Commands,
+    query: Query<Entity, With<TowerPlaceholder>>,
 ) {
     if action_state.just_pressed(&PlayerAction::EndPlacement) {
         next_state.set(GamePlayState::Wave);
         commands.spawn((Wave {
             timer: Timer::from_seconds(20.0, TimerMode::Once),
         },));
+        let entity = query.single();
+        commands.entity(entity).despawn();
     }
 }
 
