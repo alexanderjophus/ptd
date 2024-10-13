@@ -3,6 +3,7 @@ mod placement;
 mod wave;
 
 use super::GameState;
+use bevy::color::palettes;
 use bevy::prelude::*;
 use bevy::{
     ecs::system::SystemState, gltf::Gltf, gltf::GltfMesh, math::vec2, render::primitives::Aabb,
@@ -56,13 +57,6 @@ enum GamePlayState {
 
 #[derive(Component, Debug)]
 struct Obstacle;
-
-#[derive(Component)]
-pub struct Path {
-    current: Vec2,
-    next: Vec<Vec2>,
-    target: Entity,
-}
 
 #[derive(PartialEq, Eq, Clone, Copy, Hash, Debug, Reflect)]
 enum PlayerAction {
@@ -255,16 +249,16 @@ impl DynamicAssetCollection for AssetCollections {
 
 #[derive(AssetCollection, Resource)]
 pub struct TowerAssets {
-    #[asset(key = "charmander")]
-    pub charmander: Handle<TowerDetails>,
-    #[asset(key = "gastly")]
-    pub gastly: Handle<TowerDetails>,
+    #[asset(key = "centaur")]
+    pub centaur: Handle<TowerDetails>,
+    #[asset(key = "demon")]
+    pub demon: Handle<TowerDetails>,
 }
 
 #[derive(AssetCollection, Resource)]
 pub struct EnemyAssets {
-    #[asset(key = "diglett")]
-    pub diglett: Handle<EnemyDetails>,
+    #[asset(key = "orc")]
+    pub orc: Handle<EnemyDetails>,
 }
 
 #[derive(AssetCollection, Resource)]
@@ -315,7 +309,7 @@ fn setup(
         CursorPlaceholder,
     ));
 
-    let enemy = assets_enemydetails.get(&enemyassets.diglett).unwrap();
+    let enemy = assets_enemydetails.get(&enemyassets.orc).unwrap();
     let enemy_mesh = res.get(&enemy.model).unwrap();
     let enemy_mesh_mesh = assets_gltfmesh.get(&enemy_mesh.meshes[0]).unwrap();
 
@@ -323,9 +317,7 @@ fn setup(
         PbrBundle {
             mesh: enemy_mesh_mesh.primitives[0].mesh.clone(),
             material: enemy_mesh.materials[0].clone(),
-            transform: Transform::from_translation(Vec3::new(0.5, 0.0, -10.0))
-                .with_rotation(Quat::from_rotation_x(std::f32::consts::FRAC_PI_2))
-                .with_scale(Vec3::splat(4.0)),
+            transform: Transform::from_translation(Vec3::new(0.5, 0.0, -10.0)),
             ..Default::default()
         },
         EnemySpawner {
@@ -345,27 +337,44 @@ fn setup(
                 .with_scale(Vec3::splat(0.25)),
             ..Default::default()
         },
-        Goal,
-        Name::new("Goal"),
+        Name::new("House"),
     ));
 
-    commands.spawn(NavMeshBundle {
-        settings: NavMeshSettings {
-            // Define the outer borders of the navmesh.
-            fixed: Triangulation::from_outer_edges(&[
-                vec2(-20.0, -20.0),
-                vec2(20.0, -20.0),
-                vec2(20.0, 20.0),
-                vec2(-20.0, 20.0),
-            ]),
+    // spawn square placeholder for goal
+    let goal_mesh = assets_mesh.add(Rectangle::new(1.0, 1.0));
+    commands.spawn((
+        PbrBundle {
+            mesh: goal_mesh,
+            transform: Transform::default()
+                .with_translation(Vec3::new(-4.5, 0.0, -1.5))
+                .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
             ..default()
         },
-        // Mark it for update as soon as obstacles are changed.
-        // Other modes can be debounced or manually triggered.
-        update_mode: NavMeshUpdateMode::Direct,
-        // transform: Transform::from_translation(Vec3::new(-10.0, 0.0, -10.0)),
-        ..NavMeshBundle::with_default_id()
-    });
+        Goal,
+    ));
+
+    commands.spawn((
+        NavMeshBundle {
+            settings: NavMeshSettings {
+                // Define the outer borders of the navmesh.
+                fixed: Triangulation::from_outer_edges(&[
+                    vec2(-20.0, -20.0),
+                    vec2(20.0, -20.0),
+                    vec2(20.0, 20.0),
+                    vec2(-20.0, 20.0),
+                ]),
+                ..default()
+            },
+            // Mark it for update as soon as obstacles are changed.
+            // Other modes can be debounced or manually triggered.
+            update_mode: NavMeshUpdateMode::Direct,
+            transform: Transform::from_rotation(Quat::from_rotation_x(
+                -std::f32::consts::FRAC_PI_2,
+            )),
+            ..NavMeshBundle::with_default_id()
+        },
+        NavMeshDebug(palettes::tailwind::YELLOW_600.into()),
+    ));
 }
 
 #[derive(Default, Component)]

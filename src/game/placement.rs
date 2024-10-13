@@ -1,11 +1,11 @@
 use std::f32::consts::PI;
 
-use bevy::{gltf::GltfMesh, prelude::*};
+use bevy::{gltf::GltfMesh, math::VectorSpace, prelude::*, render::primitives::Aabb};
 use leafwing_input_manager::prelude::ActionState;
 
 use crate::GameState;
 
-use super::{GamePlayState, PlayerAction, Resources, TowerDetails, SNAP_OFFSET};
+use super::{GamePlayState, Obstacle, PlayerAction, Resources, TowerDetails, SNAP_OFFSET};
 
 pub struct PlacementPlugin;
 
@@ -71,8 +71,7 @@ fn setup(
         PbrBundle {
             mesh: tower_mesh_mesh.primitives[0].mesh.clone(),
             material: tower_mesh.materials[0].clone(),
-            transform: Transform::default()
-                .with_rotation(Quat::from_rotation_x(PI / 2.).mul_quat(Quat::from_rotation_z(PI))),
+            transform: Transform::from_scale(Vec3::splat(0.5)),
             ..default()
         },
         TowerPlaceholder,
@@ -145,6 +144,7 @@ fn place_tower(
     action_state: Res<ActionState<PlayerAction>>,
     mut commands: Commands,
     assets_towers: Res<Assets<TowerDetails>>,
+    mut assets_mesh: ResMut<Assets<Mesh>>,
     res: Res<Assets<Gltf>>,
     assets_gltfmesh: Res<Assets<GltfMesh>>,
     current_tower: Res<Resources>,
@@ -158,24 +158,41 @@ fn place_tower(
         let tower_mesh = res.get(&placeholder_tower.model).unwrap();
         let tower_mesh_mesh = assets_gltfmesh.get(&tower_mesh.meshes[0]).unwrap();
 
-        commands.spawn((
-            PbrBundle {
-                mesh: tower_mesh_mesh.primitives[0].mesh.clone(),
-                material: tower_mesh.materials[0].clone(),
-                transform: placeholder_transform.clone(),
-                ..default()
-            },
-            Tower {
-                name: placeholder_tower.name.clone(),
-                cost: placeholder_tower.cost,
-                range: placeholder_tower.range,
-                damage: placeholder_tower.damage,
-                projectile_speed: placeholder_tower.projectile_speed,
-                attack_speed: Timer::from_seconds(
-                    1. / placeholder_tower.rate_of_fire,
-                    TimerMode::Repeating,
-                ),
-            },
-        ));
+        // maybe can be rectangle
+        let obstacle_mesh = assets_mesh.add(Cuboid::new(2.0, 2.0, 1.0));
+        commands
+            .spawn((
+                PbrBundle {
+                    mesh: tower_mesh_mesh.primitives[0].mesh.clone(),
+                    material: tower_mesh.materials[0].clone(),
+                    transform: placeholder_transform.clone(),
+                    ..default()
+                },
+                Tower {
+                    name: placeholder_tower.name.clone(),
+                    cost: placeholder_tower.cost,
+                    range: placeholder_tower.range,
+                    damage: placeholder_tower.damage,
+                    projectile_speed: placeholder_tower.projectile_speed,
+                    attack_speed: Timer::from_seconds(
+                        1. / placeholder_tower.rate_of_fire,
+                        TimerMode::Repeating,
+                    ),
+                },
+            ))
+            .with_children(|parent| {
+                parent.spawn((
+                    PbrBundle {
+                        mesh: obstacle_mesh.clone(),
+                        transform: Transform::from_rotation(Quat::from_rotation_x(
+                            -std::f32::consts::FRAC_PI_2,
+                        ))
+                        .with_translation(Vec3::new(0.0, 0.0, -0.5)),
+                        ..Default::default()
+                    },
+                    Aabb::from_min_max(Vec3::ZERO, Vec3::ONE * 2.0),
+                    Obstacle,
+                ));
+            });
     }
 }

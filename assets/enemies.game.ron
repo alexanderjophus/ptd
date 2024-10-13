@@ -1,8 +1,8 @@
 ({
-    "diglett": Enemy (
-        name: "Diglett",
+    "orc": Enemy (
+        name: "Orc",
         health: 15,
         speed: 5,
-        model: "models/sv-diglett.glb",
+        model: "models/werewolf.glb",
     ),
 })

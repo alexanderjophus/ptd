@@ -67,7 +67,7 @@ fn spawn_enemy(
     for (mut spawner, transform) in query.iter_mut() {
         spawner.timer.tick(time.delta());
         if spawner.timer.finished() {
-            let enemy = assets_enemies.get(&assets_gltf.diglett).unwrap();
+            let enemy = assets_enemies.get(&assets_gltf.orc).unwrap();
             let enemy_mesh = res.get(&enemy.model).unwrap();
             let enemy_mesh_mesh = assets_gltfmesh.get(&enemy_mesh.meshes[0]).unwrap();
 
@@ -75,7 +75,9 @@ fn spawn_enemy(
                 PbrBundle {
                     mesh: enemy_mesh_mesh.primitives[0].mesh.clone(),
                     material: enemy_mesh.materials[0].clone(),
-                    transform: transform.with_scale(Vec3::splat(1.0)),
+                    transform: transform
+                        .with_scale(Vec3::splat(1.0))
+                        .with_scale(Vec3::splat(0.5)),
                     ..Default::default()
                 },
                 Enemy {
@@ -88,13 +90,37 @@ fn spawn_enemy(
     }
 }
 
+fn find_path(
+    mut navmeshes: ResMut<Assets<NavMesh>>,
+    navmesh: Query<(&Handle<NavMesh>, &NavMeshStatus)>,
+    mut from_query: Query<&mut Transform, With<Enemy>>,
+    to_query: Query<&Transform, (With<Goal>, Without<Enemy>)>,
+) {
+    let (navmesh_handle, status) = navmesh.single();
+    if *status != NavMeshStatus::Built {
+        return;
+    }
+    if let Some(navmesh) = navmeshes.get_mut(navmesh_handle) {
+        let to = to_query.single().translation;
+        from_query.iter_mut().for_each(|mut from| {
+            if let Some(path) = navmesh.path(from.translation.xz(), to.xz()) {
+                info_once!("path found from {:?} to {:?}", from, to);
+                info_once!("{:?}", path);
+                let next = path.path[0];
+                from.look_at(Vec3::new(next.x, 0.0, next.y), Vec3::Z);
+            } else {
+                warn_once!("no path found from {:?} to {:?}", from, to);
+            }
+        });
+    }
+}
+
 fn move_enemy(mut query: Query<&mut Transform, With<Enemy>>) {
     for mut transform in query.iter_mut() {
-        info!("Transform forward: {:?}", transform.forward());
         let forward = transform.forward();
         transform.translation += forward * 0.01;
         // base rotate off of z translation
-        transform.rotation = Quat::from_rotation_z((transform.translation.z * 2.0).sin() / 2.0);
+        transform.rotation = Quat::from_rotation_z((transform.translation.z * 8.0).sin() * 0.1);
     }
 }
 
@@ -218,28 +244,5 @@ fn target_death(
         if let Err(_) = enemies.get(projectile.target) {
             commands.entity(ent).despawn_recursive();
         }
-    }
-}
-
-fn find_path(
-    mut navmeshes: ResMut<Assets<NavMesh>>,
-    navmesh: Query<(&Handle<NavMesh>, &NavMeshStatus)>,
-    mut from_query: Query<&mut Transform, With<Enemy>>,
-    to_query: Query<&Transform, (With<Goal>, Without<Enemy>)>,
-) {
-    let (navmesh_handle, status) = navmesh.single();
-    if *status != NavMeshStatus::Built {
-        return;
-    }
-    if let Some(navmesh) = navmeshes.get_mut(navmesh_handle) {
-        let to = to_query.single().translation;
-        from_query.iter_mut().for_each(|mut from| {
-            if let Some(path) = navmesh.path(from.translation.xz(), to.xz()) {
-                let next = path.path[0];
-                from.look_at(Vec3::new(next.x, 0.0, next.y), Vec3::Z);
-            } else {
-                warn!("no path found from {:?} to {:?}", from, to);
-            }
-        });
     }
 }
