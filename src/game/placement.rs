@@ -1,11 +1,13 @@
-use std::f32::consts::PI;
-
-use bevy::{gltf::GltfMesh, math::VectorSpace, prelude::*, render::primitives::Aabb};
+use bevy::{color::palettes, gltf::GltfMesh, prelude::*, render::primitives::Aabb};
 use leafwing_input_manager::prelude::ActionState;
+use vleue_navigator::{prelude::NavMeshStatus, NavMesh};
 
 use crate::GameState;
 
-use super::{GamePlayState, Obstacle, PlayerAction, Resources, TowerDetails, SNAP_OFFSET};
+use super::{
+    wave::{self, EnemySpawner},
+    GamePlayState, Goal, Obstacle, PlayerAction, Resources, TowerDetails, SNAP_OFFSET,
+};
 
 pub struct PlacementPlugin;
 
@@ -179,6 +181,7 @@ fn place_tower(
                         TimerMode::Repeating,
                     ),
                 },
+                Obstacle,
             ))
             .with_children(|parent| {
                 parent.spawn((
@@ -188,6 +191,7 @@ fn place_tower(
                             -std::f32::consts::FRAC_PI_2,
                         ))
                         .with_translation(Vec3::new(0.0, 0.0, -0.5)),
+                        visibility: Visibility::Hidden,
                         ..Default::default()
                     },
                     Aabb::from_min_max(Vec3::ZERO, Vec3::ONE * 2.0),

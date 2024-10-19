@@ -1,6 +1,6 @@
-use std::time::Duration;
+use std::{f32::consts::PI, time::Duration};
 
-use bevy::{gltf::GltfMesh, prelude::*};
+use bevy::{color::palettes, gltf::GltfMesh, prelude::*};
 use vleue_navigator::prelude::*;
 
 use crate::GameState;
@@ -90,11 +90,12 @@ fn spawn_enemy(
     }
 }
 
-fn find_path(
+pub fn find_path(
     mut navmeshes: ResMut<Assets<NavMesh>>,
     navmesh: Query<(&Handle<NavMesh>, &NavMeshStatus)>,
     mut from_query: Query<&mut Transform, With<Enemy>>,
     to_query: Query<&Transform, (With<Goal>, Without<Enemy>)>,
+    mut gizmos: Gizmos,
 ) {
     let (navmesh_handle, status) = navmesh.single();
     if *status != NavMeshStatus::Built {
@@ -103,11 +104,11 @@ fn find_path(
     if let Some(navmesh) = navmeshes.get_mut(navmesh_handle) {
         let to = to_query.single().translation;
         from_query.iter_mut().for_each(|mut from| {
-            if let Some(path) = navmesh.path(from.translation.xz(), to.xz()) {
-                info_once!("path found from {:?} to {:?}", from, to);
-                info_once!("{:?}", path);
+            if let Some(path) = navmesh.transformed_path(from.translation, to) {
+                info_once!("whole_path {:?}", path);
                 let next = path.path[0];
-                from.look_at(Vec3::new(next.x, 0.0, next.y), Vec3::Z);
+                info_once!("next: {:?}", next);
+                from.look_at(Vec3::new(next.x, next.y, next.z), Vec3::Y);
             } else {
                 warn_once!("no path found from {:?} to {:?}", from, to);
             }

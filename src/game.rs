@@ -332,49 +332,45 @@ fn setup(
         PbrBundle {
             mesh: house_mesh_mats.primitives[0].mesh.clone(),
             material: house_mesh.materials[0].clone(),
-            transform: Transform::from_translation(Vec3::new(-6.0, 0.0, -4.0))
+            transform: Transform::from_translation(Vec3::new(-5.8, 0.0, -4.0))
                 .with_rotation(Quat::from_rotation_y(std::f32::consts::FRAC_PI_2))
                 .with_scale(Vec3::splat(0.25)),
             ..Default::default()
         },
+        Obstacle,
         Name::new("House"),
     ));
 
     // spawn square placeholder for goal
-    let goal_mesh = assets_mesh.add(Rectangle::new(1.0, 1.0));
+    let goal_mesh = assets_mesh.add(Rectangle::new(0.1, 1.0));
     commands.spawn((
         PbrBundle {
             mesh: goal_mesh,
             transform: Transform::default()
-                .with_translation(Vec3::new(-4.5, 0.0, -1.5))
+                .with_translation(Vec3::new(-3.9, 0.0, -1.5))
                 .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
             ..default()
         },
         Goal,
     ));
 
-    commands.spawn((
-        NavMeshBundle {
-            settings: NavMeshSettings {
-                // Define the outer borders of the navmesh.
-                fixed: Triangulation::from_outer_edges(&[
-                    vec2(-20.0, -20.0),
-                    vec2(20.0, -20.0),
-                    vec2(20.0, 20.0),
-                    vec2(-20.0, 20.0),
-                ]),
-                ..default()
-            },
-            // Mark it for update as soon as obstacles are changed.
-            // Other modes can be debounced or manually triggered.
-            update_mode: NavMeshUpdateMode::Direct,
-            transform: Transform::from_rotation(Quat::from_rotation_x(
-                -std::f32::consts::FRAC_PI_2,
-            )),
-            ..NavMeshBundle::with_default_id()
+    commands.spawn((NavMeshBundle {
+        settings: NavMeshSettings {
+            // Define the outer borders of the navmesh.
+            fixed: Triangulation::from_outer_edges(&[
+                vec2(-20.0, -20.0),
+                vec2(20.0, -20.0),
+                vec2(20.0, 20.0),
+                vec2(-20.0, 20.0),
+            ]),
+            ..default()
         },
-        NavMeshDebug(palettes::tailwind::YELLOW_600.into()),
-    ));
+        // Mark it for update as soon as obstacles are changed.
+        // Other modes can be debounced or manually triggered.
+        update_mode: NavMeshUpdateMode::Direct,
+        transform: Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
+        ..NavMeshBundle::with_default_id()
+    },));
 }
 
 #[derive(Default, Component)]
