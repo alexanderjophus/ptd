@@ -1,13 +1,9 @@
-use bevy::{color::palettes, gltf::GltfMesh, prelude::*, render::primitives::Aabb};
+use bevy::{gltf::GltfMesh, prelude::*, render::primitives::Aabb};
 use leafwing_input_manager::prelude::ActionState;
-use vleue_navigator::{prelude::NavMeshStatus, NavMesh};
 
 use crate::GameState;
 
-use super::{
-    wave::{self, EnemySpawner},
-    GamePlayState, Goal, Obstacle, PlayerAction, Resources, TowerDetails, SNAP_OFFSET,
-};
+use super::{GamePlayState, Obstacle, PlayerAction, Resources, TowerDetails, SNAP_OFFSET};
 
 pub struct PlacementPlugin;
 

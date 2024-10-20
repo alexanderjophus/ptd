@@ -3,7 +3,6 @@ mod placement;
 mod wave;
 
 use super::GameState;
-use bevy::color::palettes;
 use bevy::prelude::*;
 use bevy::{
     ecs::system::SystemState, gltf::Gltf, gltf::GltfMesh, math::vec2, render::primitives::Aabb,

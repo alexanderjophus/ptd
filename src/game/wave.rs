@@ -1,6 +1,6 @@
-use std::{f32::consts::PI, time::Duration};
+use std::time::Duration;
 
-use bevy::{color::palettes, gltf::GltfMesh, prelude::*};
+use bevy::{gltf::GltfMesh, prelude::*};
 use vleue_navigator::prelude::*;
 
 use crate::GameState;
@@ -95,7 +95,6 @@ pub fn find_path(
     navmesh: Query<(&Handle<NavMesh>, &NavMeshStatus)>,
     mut from_query: Query<&mut Transform, With<Enemy>>,
     to_query: Query<&Transform, (With<Goal>, Without<Enemy>)>,
-    mut gizmos: Gizmos,
 ) {
     let (navmesh_handle, status) = navmesh.single();
     if *status != NavMeshStatus::Built {
