@@ -2,7 +2,7 @@
     "centaur": Tower (
         name: "Centaur",
         cost: 10,
-        range: 0.0,
+        range: 5.0,
         damage: 3,
         rate_of_fire: 5.0,
         projectile_speed: 25.0,

@@ -27,13 +27,15 @@ There's a feature flag for debug `--features debug` which will show the grid and
 - Grid based system
 - Towers are obstacles the enemy must be able to navigate around
 
-### Todo features
+### Todo list
 
-(Not in any particular order, and this may becoe outdated)
+(Not in any particular order, and this may become outdated)
 
 - [ ] Towers have a base shape that is a hexomino based on a cube net. (i.e. unravel a cube into a 2D shape)
+- [ ] Pathfinding is visible during placement phase
 - [ ] Moddable towers/enemies. i.e. a ron file that points to new valid glb files, with all the towers config done.
-- [ ] Pathfinding 2.0 (disable blocking a path)
+- [ ] Pathfinding 1.1 (disable blocking a path)
+- [ ] End of wave logic (currently crashes trying to go back to placement phase)
 - [ ] More tower types
 - [ ] More enemy types
 

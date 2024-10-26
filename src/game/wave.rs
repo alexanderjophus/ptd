@@ -75,9 +75,7 @@ fn spawn_enemy(
                 PbrBundle {
                     mesh: enemy_mesh_mesh.primitives[0].mesh.clone(),
                     material: enemy_mesh.materials[0].clone(),
-                    transform: transform
-                        .with_scale(Vec3::splat(1.0))
-                        .with_scale(Vec3::splat(0.5)),
+                    transform: transform.with_scale(Vec3::splat(0.5)),
                     ..Default::default()
                 },
                 Enemy {
@@ -104,9 +102,7 @@ pub fn find_path(
         let to = to_query.single().translation;
         from_query.iter_mut().for_each(|mut from| {
             if let Some(path) = navmesh.transformed_path(from.translation, to) {
-                info_once!("whole_path {:?}", path);
                 let next = path.path[0];
-                info_once!("next: {:?}", next);
                 from.look_at(Vec3::new(next.x, next.y, next.z), Vec3::Y);
             } else {
                 warn_once!("no path found from {:?} to {:?}", from, to);

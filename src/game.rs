@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use std::f32::consts::PI;
 use std::time::Duration;
 use vleue_navigator::prelude::*;
-use wave::{EnemyDetails, EnemySpawner, WavePlugin};
+use wave::{Enemy, EnemyDetails, EnemySpawner, WavePlugin};
 
 const SNAP_OFFSET: f32 = 0.5;
 
@@ -381,28 +381,34 @@ fn start_wave(
     action_state: Res<ActionState<PlayerAction>>,
     mut next_state: ResMut<NextState<GamePlayState>>,
     mut commands: Commands,
-    query: Query<Entity, With<TowerPlaceholder>>,
 ) {
     if action_state.just_pressed(&PlayerAction::EndPlacement) {
         next_state.set(GamePlayState::Wave);
         commands.spawn((Wave {
             timer: Timer::from_seconds(20.0, TimerMode::Once),
         },));
-        let entity = query.single();
-        commands.entity(entity).despawn();
     }
 }
 
 fn end_wave(
     mut next_state: ResMut<NextState<GamePlayState>>,
     time: Res<Time>,
-    mut query: Query<&mut Wave>,
+    mut wave_query: Query<&mut Wave>,
+    mut enemy_query: Query<Entity, With<Enemy>>,
 ) {
-    for mut wave in query.iter_mut() {
+    for mut wave in wave_query.iter_mut() {
         wave.timer.tick(time.delta());
         if wave.timer.finished() {
-            // && enemies are dead
-            next_state.set(GamePlayState::Placement);
+            let mut all_enemies_dead = true;
+            for _ in enemy_query.iter_mut() {
+                all_enemies_dead = false;
+                break;
+            }
+
+            if all_enemies_dead {
+                info!("Wave ended");
+                next_state.set(GamePlayState::Placement);
+            }
         }
     }
 }
