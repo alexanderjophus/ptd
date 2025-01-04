@@ -1,4 +1,5 @@
 mod camera;
+mod economy;
 mod placement;
 mod wave;
 
@@ -10,6 +11,7 @@ use bevy::{
 use bevy_asset_loader::prelude::*;
 use bevy_common_assets::ron::RonAssetPlugin;
 use camera::CameraPlugin;
+use economy::EconomyPlugin;
 use leafwing_input_manager::prelude::*;
 use placement::{CursorPlaceholder, PlacementPlugin};
 use std::collections::HashMap;
@@ -28,6 +30,7 @@ impl Plugin for GamePlugin {
             .add_plugins((
                 InputManagerPlugin::<PlayerAction>::default(),
                 CameraPlugin,
+                EconomyPlugin,
                 PlacementPlugin,
                 WavePlugin,
                 RonAssetPlugin::<AssetCollections>::new(&["game.ron"]),
@@ -91,11 +94,11 @@ impl PlayerAction {
         input_map.insert(Self::EndPlacement, GamepadButton::West);
 
         // // Default kbm input bindings
-        // input_map.insert_dual_axis(Self::MoveCamera, KeyboardVirtualDPad::WASD);
-        // input_map.insert_dual_axis(Self::MoveCursorPlaceholder, KeyboardVirtualDPad::ARROW_KEYS);
-        // input_map.insert(Self::ToggleTowerType, KeyCode::KeyT);
-        // input_map.insert(Self::PlaceTower, KeyCode::Space);
-        // input_map.insert(Self::EndPlacement, KeyCode::Enter);
+        input_map.insert_dual_axis(Self::MoveCamera, VirtualDPad::wasd());
+        input_map.insert_dual_axis(Self::MoveCursorPlaceholder, VirtualDPad::arrow_keys());
+        input_map.insert(Self::ToggleTowerType, KeyCode::KeyT);
+        input_map.insert(Self::PlaceTower, KeyCode::Space);
+        input_map.insert(Self::EndPlacement, KeyCode::Enter);
 
         input_map
     }

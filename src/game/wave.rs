@@ -6,6 +6,7 @@ use vleue_navigator::prelude::*;
 use crate::GameState;
 
 use super::{
+    economy::Economy,
     placement::{Projectile, Tower},
     EnemyAssets, GamePlayState, Goal,
 };
@@ -224,10 +225,12 @@ fn target_death(
     mut commands: Commands,
     enemies: Query<(Entity, &Enemy)>,
     projectiles: Query<(Entity, &Projectile)>,
+    mut economy: ResMut<Economy>,
 ) {
     for (ent, enemy) in &enemies {
         if enemy.health <= 0 {
             commands.entity(ent).despawn_recursive();
+            economy.money += 10;
         }
     }
     for (ent, projectile) in &projectiles {

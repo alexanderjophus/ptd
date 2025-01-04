@@ -12,13 +12,10 @@ impl Plugin for DebugPlugin {
             WorldInspectorPlugin::default().run_if(input_toggle_active(true, KeyCode::Escape)),
         )
         .add_plugins(InfiniteGridPlugin)
-        .add_systems(
-            OnEnter(GameState::Game),
-            debug_system.run_if(input_toggle_active(true, KeyCode::F1)),
-        );
+        .add_systems(OnEnter(GameState::Game), spawn_grid);
     }
 }
 
-fn debug_system(mut commands: Commands) {
+fn spawn_grid(mut commands: Commands) {
     commands.spawn(InfiniteGridBundle::default());
 }

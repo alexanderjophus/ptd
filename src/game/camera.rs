@@ -16,20 +16,30 @@ impl Plugin for CameraPlugin {
 
 #[derive(Reflect, Component, Default)]
 #[reflect(Component)]
-struct Camera;
+struct FollowCam;
 
 fn setup(mut commands: Commands) {
     commands.spawn((
         Camera3d::default(),
         Transform::from_xyz(0.0, 2.0, 5.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
-        Camera,
+        FollowCam,
+    ));
+
+    // spawn 2D overlay
+    commands.spawn((
+        Camera2d::default(),
+        Camera {
+            order: 1,
+            clear_color: ClearColorConfig::None,
+            ..Default::default()
+        },
     ));
 }
 
 fn control_camera(
     time: Res<Time>,
     action_state: Res<ActionState<PlayerAction>>,
-    mut query: Query<&mut Transform, With<Camera>>,
+    mut query: Query<&mut Transform, With<FollowCam>>,
 ) {
     let mut player_transform = query.single_mut();
     let move_delta = time.delta_secs()
