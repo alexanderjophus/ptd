@@ -42,20 +42,7 @@ struct OnSplashScreen;
 struct SplashCamera;
 
 fn splash_setup(mut commands: Commands) {
-    commands.spawn((Camera2dBundle::default(), SplashCamera));
+    commands.spawn((Camera2d::default(), SplashCamera));
 
-    commands.spawn((
-        TextBundle {
-            text: Text::from_section(
-                GAME_NAME,
-                TextStyle {
-                    font_size: 180.0,
-                    color: Color::BLACK,
-                    ..Default::default()
-                },
-            ),
-            ..Default::default()
-        },
-        OnSplashScreen,
-    ));
+    commands.spawn((Text(GAME_NAME.to_string()), OnSplashScreen));
 }

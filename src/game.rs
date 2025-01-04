@@ -11,7 +11,7 @@ use bevy_asset_loader::prelude::*;
 use bevy_common_assets::ron::RonAssetPlugin;
 use camera::CameraPlugin;
 use leafwing_input_manager::prelude::*;
-use placement::{CursorPlaceholder, PlacementPlugin, TowerPlaceholder};
+use placement::{CursorPlaceholder, PlacementPlugin};
 use std::collections::HashMap;
 use std::f32::consts::PI;
 use std::time::Duration;
@@ -86,16 +86,16 @@ impl PlayerAction {
         // Default gamepad input bindings
         input_map.insert_dual_axis(Self::MoveCamera, GamepadStick::LEFT);
         input_map.insert_dual_axis(Self::MoveCursorPlaceholder, GamepadStick::RIGHT);
-        input_map.insert(Self::ToggleTowerType, GamepadButtonType::East);
-        input_map.insert(Self::PlaceTower, GamepadButtonType::South);
-        input_map.insert(Self::EndPlacement, GamepadButtonType::West);
+        input_map.insert(Self::ToggleTowerType, GamepadButton::East);
+        input_map.insert(Self::PlaceTower, GamepadButton::South);
+        input_map.insert(Self::EndPlacement, GamepadButton::West);
 
-        // Default kbm input bindings
-        input_map.insert_dual_axis(Self::MoveCamera, KeyboardVirtualDPad::WASD);
-        input_map.insert_dual_axis(Self::MoveCursorPlaceholder, KeyboardVirtualDPad::ARROW_KEYS);
-        input_map.insert(Self::ToggleTowerType, KeyCode::KeyT);
-        input_map.insert(Self::PlaceTower, KeyCode::Space);
-        input_map.insert(Self::EndPlacement, KeyCode::Enter);
+        // // Default kbm input bindings
+        // input_map.insert_dual_axis(Self::MoveCamera, KeyboardVirtualDPad::WASD);
+        // input_map.insert_dual_axis(Self::MoveCursorPlaceholder, KeyboardVirtualDPad::ARROW_KEYS);
+        // input_map.insert(Self::ToggleTowerType, KeyCode::KeyT);
+        // input_map.insert(Self::PlaceTower, KeyCode::Space);
+        // input_map.insert(Self::EndPlacement, KeyCode::Enter);
 
         input_map
     }
@@ -279,32 +279,24 @@ fn setup(
     res: Res<Assets<Gltf>>,
 ) {
     commands.spawn((
-        DirectionalLightBundle {
-            directional_light: DirectionalLight {
-                illuminance: light_consts::lux::OVERCAST_DAY,
-                shadows_enabled: true,
-                ..default()
-            },
-            transform: Transform {
-                translation: Vec3::new(0.0, 20.0, 0.0),
-                rotation: Quat::from_rotation_x(-PI / 4.),
-                ..default()
-            },
+        DirectionalLight {
+            illuminance: light_consts::lux::OVERCAST_DAY,
+            shadows_enabled: true,
+            ..default()
+        },
+        Transform {
+            translation: Vec3::new(0.0, 20.0, 0.0),
+            rotation: Quat::from_rotation_x(-PI / 4.),
             ..default()
         },
         Name::new("Directional Light"),
     ));
 
-    // spawn circle placeholder for tower
-    let placeholder_mesh = assets_mesh.add(Circle::new(0.5));
     commands.spawn((
-        PbrBundle {
-            mesh: placeholder_mesh,
-            transform: Transform::default()
-                .with_translation(Vec3::new(SNAP_OFFSET, 0.0, SNAP_OFFSET))
-                .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
-            ..default()
-        },
+        Mesh3d(assets_mesh.add(Circle::new(0.5))),
+        Transform::default()
+            .with_translation(Vec3::new(SNAP_OFFSET, 0.0, SNAP_OFFSET))
+            .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
         CursorPlaceholder,
     ));
 
@@ -313,12 +305,9 @@ fn setup(
     let enemy_mesh_mesh = assets_gltfmesh.get(&enemy_mesh.meshes[0]).unwrap();
 
     commands.spawn((
-        PbrBundle {
-            mesh: enemy_mesh_mesh.primitives[0].mesh.clone(),
-            material: enemy_mesh.materials[0].clone(),
-            transform: Transform::from_translation(Vec3::new(0.5, 0.0, -10.0)),
-            ..Default::default()
-        },
+        Mesh3d(enemy_mesh_mesh.primitives[0].mesh.clone()),
+        MeshMaterial3d(enemy_mesh.materials[0].clone()),
+        Transform::from_translation(Vec3::new(0.5, 0.0, -10.0)),
         EnemySpawner {
             timer: Timer::new(Duration::from_secs(1), TimerMode::Repeating),
         },
@@ -328,33 +317,26 @@ fn setup(
     let house_mesh_mats = assets_gltfmesh.get(&house_mesh.meshes[0]).unwrap();
 
     commands.spawn((
-        PbrBundle {
-            mesh: house_mesh_mats.primitives[0].mesh.clone(),
-            material: house_mesh.materials[0].clone(),
-            transform: Transform::from_translation(Vec3::new(-5.8, 0.0, -4.0))
-                .with_rotation(Quat::from_rotation_y(std::f32::consts::FRAC_PI_2))
-                .with_scale(Vec3::splat(0.25)),
-            ..Default::default()
-        },
+        Mesh3d(house_mesh_mats.primitives[0].mesh.clone()),
+        MeshMaterial3d(house_mesh.materials[0].clone()),
+        Transform::from_translation(Vec3::new(-5.8, 0.0, -4.0))
+            .with_rotation(Quat::from_rotation_y(std::f32::consts::FRAC_PI_2))
+            .with_scale(Vec3::splat(0.25)),
         Obstacle,
         Name::new("House"),
     ));
 
     // spawn square placeholder for goal
-    let goal_mesh = assets_mesh.add(Rectangle::new(0.1, 1.0));
     commands.spawn((
-        PbrBundle {
-            mesh: goal_mesh,
-            transform: Transform::default()
-                .with_translation(Vec3::new(-3.9, 0.0, -1.5))
-                .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
-            ..default()
-        },
+        Mesh3d(assets_mesh.add(Rectangle::new(0.1, 1.0))),
+        Transform::default()
+            .with_translation(Vec3::new(-3.9, 0.0, -1.5))
+            .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
         Goal,
     ));
 
-    commands.spawn((NavMeshBundle {
-        settings: NavMeshSettings {
+    commands.spawn((
+        NavMeshSettings {
             // Define the outer borders of the navmesh.
             fixed: Triangulation::from_outer_edges(&[
                 vec2(-20.0, -20.0),
@@ -366,10 +348,9 @@ fn setup(
         },
         // Mark it for update as soon as obstacles are changed.
         // Other modes can be debounced or manually triggered.
-        update_mode: NavMeshUpdateMode::Direct,
-        transform: Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
-        ..NavMeshBundle::with_default_id()
-    },));
+        NavMeshUpdateMode::Direct,
+        Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
+    ));
 }
 
 #[derive(Default, Component)]

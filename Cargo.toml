@@ -8,15 +8,15 @@ default = []
 debug = []
 
 [dependencies]
-bevy = { version = "0.14", features = ["jpeg"] }
-bevy_asset_loader = { version = "0.21.0", features = [
+bevy = { version = "0.15", features = ["jpeg"] }
+bevy_asset_loader = { version = "0.22.0", features = [
     "standard_dynamic_assets",
 ] }
-bevy_egui = "0.28.0"
-bevy-inspector-egui = "0.25.2"
-leafwing-input-manager = "0.15.0"
-bevy_infinite_grid = "0.13.0"
-bevy_common_assets = { version = "0.11.0", features = ["ron"] }
-serde = "1.0.210"
-anyhow = "1.0.89"
-vleue_navigator = { version = "0.10.2", features = ["debug-with-gizmos"] }
+bevy_egui = "0.31.1"
+bevy-inspector-egui = "0.28.1"
+leafwing-input-manager = "0.16.0"
+bevy_infinite_grid = "0.14.0"
+bevy_common_assets = { version = "0.12.0", features = ["ron"] }
+serde = "1.0.217"
+anyhow = "1.0.95"
+vleue_navigator = { version = "0.11.1", features = ["debug-with-gizmos"] }

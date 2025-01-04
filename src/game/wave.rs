@@ -27,7 +27,7 @@ impl Plugin for WavePlugin {
                 target_death,
                 enemy_goal_collision,
             )
-                .run_if(in_state(GameState::Game).and_then(in_state(GamePlayState::Wave))),
+                .run_if(in_state(GameState::Game).and(in_state(GamePlayState::Wave))),
         );
     }
 }
@@ -72,12 +72,9 @@ fn spawn_enemy(
             let enemy_mesh_mesh = assets_gltfmesh.get(&enemy_mesh.meshes[0]).unwrap();
 
             commands.spawn((
-                PbrBundle {
-                    mesh: enemy_mesh_mesh.primitives[0].mesh.clone(),
-                    material: enemy_mesh.materials[0].clone(),
-                    transform: transform.with_scale(Vec3::splat(0.5)),
-                    ..Default::default()
-                },
+                Mesh3d(enemy_mesh_mesh.primitives[0].mesh.clone()),
+                MeshMaterial3d(enemy_mesh.materials[0].clone()),
+                transform.with_scale(Vec3::splat(0.5)),
                 Enemy {
                     name: enemy.name.clone(),
                     health: enemy.health,
@@ -90,7 +87,7 @@ fn spawn_enemy(
 
 pub fn find_path(
     mut navmeshes: ResMut<Assets<NavMesh>>,
-    navmesh: Query<(&Handle<NavMesh>, &NavMeshStatus)>,
+    navmesh: Query<(&ManagedNavMesh, &NavMeshStatus)>,
     mut from_query: Query<&mut Transform, With<Enemy>>,
     to_query: Query<&Transform, (With<Goal>, Without<Enemy>)>,
 ) {
@@ -140,11 +137,8 @@ fn tower_shooting(
                 let placeholder_mesh = meshes.add(Sphere::new(0.1));
                 if distance < tower.range {
                     commands.spawn((
-                        PbrBundle {
-                            mesh: placeholder_mesh.clone(),
-                            transform: Transform::from_translation(bullet_spawn),
-                            ..Default::default()
-                        },
+                        Mesh3d(placeholder_mesh.clone()),
+                        Transform::from_translation(bullet_spawn),
                         Projectile {
                             target: enemy,
                             speed: tower.projectile_speed,
@@ -169,7 +163,7 @@ fn move_projectile(
         if let Ok(target) = enemy_query.get(projectile.target) {
             let direction = target.translation - transform.translation;
             let distance = direction.length();
-            let velocity = direction.normalize() * projectile.speed * time.delta_seconds();
+            let velocity = direction.normalize() * projectile.speed * time.delta_secs();
 
             if distance < velocity.length() {
                 commands.entity(entity).despawn();

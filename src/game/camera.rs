@@ -20,11 +20,8 @@ struct Camera;
 
 fn setup(mut commands: Commands) {
     commands.spawn((
-        Camera3dBundle {
-            transform: Transform::from_xyz(0.0, 2.0, 5.0)
-                .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
-            ..default()
-        },
+        Camera3d::default(),
+        Transform::from_xyz(0.0, 2.0, 5.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
         Camera,
     ));
 }
@@ -35,7 +32,7 @@ fn control_camera(
     mut query: Query<&mut Transform, With<Camera>>,
 ) {
     let mut player_transform = query.single_mut();
-    let move_delta = time.delta_seconds()
+    let move_delta = time.delta_secs()
         * action_state
             .clamped_axis_pair(&PlayerAction::MoveCamera)
             .xy();

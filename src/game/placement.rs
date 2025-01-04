@@ -18,7 +18,7 @@ impl Plugin for PlacementPlugin {
                     toggle_placeholder_type,
                     place_tower,
                 )
-                    .run_if(in_state(GameState::Game).and_then(in_state(GamePlayState::Placement))),
+                    .run_if(in_state(GameState::Game).and(in_state(GamePlayState::Placement))),
             );
     }
 }
@@ -66,12 +66,9 @@ fn setup(
     let tower_mesh_mesh = assets_gltfmesh.get(&tower_mesh.meshes[0]).unwrap();
 
     commands.spawn((
-        PbrBundle {
-            mesh: tower_mesh_mesh.primitives[0].mesh.clone(),
-            material: tower_mesh.materials[0].clone(),
-            transform: Transform::from_scale(Vec3::splat(0.5)),
-            ..default()
-        },
+        Mesh3d(tower_mesh_mesh.primitives[0].mesh.clone()),
+        MeshMaterial3d(tower_mesh.materials[0].clone()),
+        Transform::from_scale(Vec3::splat(0.5)),
         TowerPlaceholder,
     ));
 }
@@ -82,7 +79,7 @@ fn control_cursor(
     mut query: Query<&mut Transform, With<CursorPlaceholder>>,
 ) {
     let mut player_transform = query.single_mut();
-    let move_delta = time.delta_seconds()
+    let move_delta = time.delta_secs()
         * 2.0
         * action_state
             .clamped_axis_pair(&PlayerAction::MoveCursorPlaceholder)
@@ -120,7 +117,8 @@ fn toggle_placeholder_type(
     assets_gltfmesh: Res<Assets<GltfMesh>>,
     assets_towers: Res<Assets<TowerDetails>>,
     res: Res<Assets<Gltf>>,
-    mut query: Query<(&mut Handle<Mesh>, &mut Handle<StandardMaterial>), With<TowerPlaceholder>>,
+    // mut query: Query<(&mut Mesh3d, &mut Handle<StandardMaterial>), With<TowerPlaceholder>>,
+    mut query: Query<(&mut Mesh3d, &mut MeshMaterial3d<StandardMaterial>), With<TowerPlaceholder>>,
 ) {
     if action_state.just_pressed(&PlayerAction::ToggleTowerType) {
         current_tower.current_tower =
@@ -133,8 +131,8 @@ fn toggle_placeholder_type(
             .get(&placeholder_tower_gltf.meshes[0])
             .unwrap();
         let (mut mesh, mut mat) = query.single_mut();
-        *mesh = placeholder_tower_mesh.primitives[0].mesh.clone();
-        *mat = placeholder_tower_gltf.materials[0].clone();
+        mesh.0 = placeholder_tower_mesh.primitives[0].mesh.clone();
+        mat.0 = placeholder_tower_gltf.materials[0].clone();
     }
 }
 
@@ -160,12 +158,9 @@ fn place_tower(
         let obstacle_mesh = assets_mesh.add(Cuboid::new(2.0, 2.0, 1.0));
         commands
             .spawn((
-                PbrBundle {
-                    mesh: tower_mesh_mesh.primitives[0].mesh.clone(),
-                    material: tower_mesh.materials[0].clone(),
-                    transform: placeholder_transform.clone(),
-                    ..default()
-                },
+                Mesh3d(tower_mesh_mesh.primitives[0].mesh.clone()),
+                MeshMaterial3d(tower_mesh.materials[0].clone()),
+                placeholder_transform.clone(),
                 Tower {
                     name: placeholder_tower.name.clone(),
                     cost: placeholder_tower.cost,
@@ -181,15 +176,10 @@ fn place_tower(
             ))
             .with_children(|parent| {
                 parent.spawn((
-                    PbrBundle {
-                        mesh: obstacle_mesh.clone(),
-                        transform: Transform::from_rotation(Quat::from_rotation_x(
-                            -std::f32::consts::FRAC_PI_2,
-                        ))
+                    Mesh3d(obstacle_mesh.clone()),
+                    Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2))
                         .with_translation(Vec3::new(0.0, 0.0, -0.5)),
-                        visibility: Visibility::Hidden,
-                        ..Default::default()
-                    },
+                    Visibility::Hidden,
                     Aabb::from_min_max(Vec3::ZERO, Vec3::ONE * 2.0),
                     Obstacle,
                 ));
