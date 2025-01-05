@@ -1,15 +1,18 @@
 use bevy::{gltf::GltfMesh, prelude::*, render::primitives::Aabb};
-use leafwing_input_manager::prelude::ActionState;
+use leafwing_input_manager::{prelude::*, Actionlike, InputControlKind};
 
 use crate::GameState;
 
-use super::{GamePlayState, Obstacle, PlayerAction, Resources, TowerDetails, SNAP_OFFSET};
+use super::{GamePlayState, Obstacle, Resources, TowerDetails, Wave, SNAP_OFFSET};
 
 pub struct PlacementPlugin;
 
 impl Plugin for PlacementPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(GameState::Game), setup)
+        app.add_plugins(InputManagerPlugin::<PlacementAction>::default())
+            .init_resource::<ActionState<PlacementAction>>()
+            .insert_resource(PlacementAction::default_input_map())
+            .add_systems(OnEnter(GameState::Game), setup)
             .add_systems(
                 Update,
                 (
@@ -17,9 +20,50 @@ impl Plugin for PlacementPlugin {
                     placeholder_snap_to_cursor,
                     toggle_placeholder_type,
                     place_tower,
+                    start_wave,
                 )
                     .run_if(in_state(GameState::Game).and(in_state(GamePlayState::Placement))),
             );
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Copy, Hash, Debug, Reflect)]
+enum PlacementAction {
+    MoveCursorPlaceholder,
+    ToggleTowerType,
+    PlaceTower,
+    EndPlacement,
+}
+
+impl Actionlike for PlacementAction {
+    fn input_control_kind(&self) -> InputControlKind {
+        match self {
+            PlacementAction::MoveCursorPlaceholder => InputControlKind::DualAxis,
+            PlacementAction::ToggleTowerType => InputControlKind::Button,
+            PlacementAction::PlaceTower => InputControlKind::Button,
+            PlacementAction::EndPlacement => InputControlKind::Button,
+        }
+    }
+}
+
+impl PlacementAction {
+    /// Define the default bindings to the input
+    fn default_input_map() -> InputMap<Self> {
+        let mut input_map = InputMap::default();
+
+        // Default gamepad input bindings
+        input_map.insert_dual_axis(Self::MoveCursorPlaceholder, GamepadStick::RIGHT);
+        input_map.insert(Self::ToggleTowerType, GamepadButton::East);
+        input_map.insert(Self::PlaceTower, GamepadButton::South);
+        input_map.insert(Self::EndPlacement, GamepadButton::West);
+
+        // // Default kbm input bindings
+        input_map.insert_dual_axis(Self::MoveCursorPlaceholder, VirtualDPad::arrow_keys());
+        input_map.insert(Self::ToggleTowerType, KeyCode::KeyT);
+        input_map.insert(Self::PlaceTower, KeyCode::Space);
+        input_map.insert(Self::EndPlacement, KeyCode::Enter);
+
+        input_map
     }
 }
 
@@ -75,14 +119,14 @@ fn setup(
 
 fn control_cursor(
     time: Res<Time>,
-    action_state: Res<ActionState<PlayerAction>>,
+    action_state: Res<ActionState<PlacementAction>>,
     mut query: Query<&mut Transform, With<CursorPlaceholder>>,
 ) {
     let mut player_transform = query.single_mut();
     let move_delta = time.delta_secs()
         * 2.0
         * action_state
-            .clamped_axis_pair(&PlayerAction::MoveCursorPlaceholder)
+            .clamped_axis_pair(&PlacementAction::MoveCursorPlaceholder)
             .xy();
     player_transform.translation += Vec3::new(move_delta.x, 0.0, -move_delta.y);
 }
@@ -112,15 +156,14 @@ fn placeholder_snap_to_cursor(
 }
 
 fn toggle_placeholder_type(
-    action_state: Res<ActionState<PlayerAction>>,
+    action_state: Res<ActionState<PlacementAction>>,
     mut current_tower: ResMut<Resources>,
     assets_gltfmesh: Res<Assets<GltfMesh>>,
     assets_towers: Res<Assets<TowerDetails>>,
     res: Res<Assets<Gltf>>,
-    // mut query: Query<(&mut Mesh3d, &mut Handle<StandardMaterial>), With<TowerPlaceholder>>,
     mut query: Query<(&mut Mesh3d, &mut MeshMaterial3d<StandardMaterial>), With<TowerPlaceholder>>,
 ) {
-    if action_state.just_pressed(&PlayerAction::ToggleTowerType) {
+    if action_state.just_pressed(&PlacementAction::ToggleTowerType) {
         current_tower.current_tower =
             (current_tower.current_tower + 1) % current_tower.towers.len();
 
@@ -137,7 +180,7 @@ fn toggle_placeholder_type(
 }
 
 fn place_tower(
-    action_state: Res<ActionState<PlayerAction>>,
+    action_state: Res<ActionState<PlacementAction>>,
     mut commands: Commands,
     assets_towers: Res<Assets<TowerDetails>>,
     mut assets_mesh: ResMut<Assets<Mesh>>,
@@ -147,7 +190,7 @@ fn place_tower(
     placeholder_query: Query<&Transform, With<TowerPlaceholder>>,
 ) {
     let placeholder_transform = placeholder_query.single();
-    if action_state.just_pressed(&PlayerAction::PlaceTower) {
+    if action_state.just_pressed(&PlacementAction::PlaceTower) {
         let placeholder_tower = assets_towers
             .get(current_tower.towers[current_tower.current_tower])
             .unwrap();
@@ -184,5 +227,18 @@ fn place_tower(
                     Obstacle,
                 ));
             });
+    }
+}
+
+fn start_wave(
+    action_state: Res<ActionState<PlacementAction>>,
+    mut next_state: ResMut<NextState<GamePlayState>>,
+    mut commands: Commands,
+) {
+    if action_state.just_pressed(&PlacementAction::EndPlacement) {
+        next_state.set(GamePlayState::Wave);
+        commands.spawn((Wave {
+            timer: Timer::from_seconds(20.0, TimerMode::Once),
+        },));
     }
 }
