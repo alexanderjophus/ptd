@@ -3,7 +3,7 @@ use leafwing_input_manager::{prelude::*, Actionlike, InputControlKind};
 
 use crate::GameState;
 
-use super::GamePlayState;
+use super::{BaseElementType, DiePool, DieShopItem, GamePlayState, Rarity};
 
 pub struct EconomyPlugin;
 
@@ -13,10 +13,39 @@ impl Plugin for EconomyPlugin {
             .init_resource::<ActionState<EconomyAction>>()
             .insert_resource(EconomyAction::default_input_map())
             .insert_resource(Economy { money: 100 })
+            .insert_resource(DieShop {
+                highlighted: 0,
+                items: vec![
+                    DieShopItem::TypedDie {
+                        primary_type: BaseElementType::Fire,
+                        rarity: Rarity::Common,
+                        cost: 10,
+                    },
+                    DieShopItem::TypedDie {
+                        primary_type: BaseElementType::Water,
+                        rarity: Rarity::Common,
+                        cost: 10,
+                    },
+                    DieShopItem::TypedDie {
+                        primary_type: BaseElementType::Earth,
+                        rarity: Rarity::Common,
+                        cost: 10,
+                    },
+                    DieShopItem::TypedDie {
+                        primary_type: BaseElementType::Wind,
+                        rarity: Rarity::Common,
+                        cost: 10,
+                    },
+                    DieShopItem::RandomDie {
+                        rarity: Rarity::Rare,
+                        cost: 30,
+                    },
+                ],
+            })
             .add_systems(OnEnter(GameState::Game), economy_setup)
             .add_systems(
                 Update,
-                (buy_die, start_placement)
+                (choose_die, start_placement)
                     .run_if(in_state(GamePlayState::Economy).and(in_state(GameState::Game))),
             )
             .add_systems(Update, update_resources.run_if(in_state(GameState::Game)));
@@ -66,7 +95,13 @@ impl EconomyAction {
 
 #[derive(Resource)]
 pub struct Economy {
-    pub money: u32,
+    pub money: usize,
+}
+
+#[derive(Resource, Debug, Clone, PartialEq)]
+struct DieShop {
+    items: Vec<DieShopItem>,
+    highlighted: usize,
 }
 
 #[derive(Component)]
@@ -79,9 +114,29 @@ fn economy_setup(mut commands: Commands, economy: Res<Economy>) {
     ));
 }
 
-fn buy_die(action_state: Res<ActionState<EconomyAction>>, mut economy: ResMut<Economy>) {
+fn choose_die(
+    action_state: Res<ActionState<EconomyAction>>,
+    mut economy: ResMut<Economy>,
+    mut shop: ResMut<DieShop>,
+    mut pool: ResMut<DiePool>,
+) {
+    if action_state.just_pressed(&EconomyAction::ToggleDieLeft) {
+        shop.highlighted = (shop.highlighted + shop.items.len() - 1) % shop.items.len();
+    }
+    if action_state.just_pressed(&EconomyAction::ToggleDieRight) {
+        shop.highlighted = (shop.highlighted + 1) % shop.items.len();
+    }
+    // Buy the die, remove costs, add to diepool resource
     if action_state.just_pressed(&EconomyAction::BuyDie) {
-        economy.money -= 10;
+        let cost = match &shop.items[shop.highlighted] {
+            DieShopItem::TypedDie { cost, .. } => cost,
+            DieShopItem::RandomDie { cost, .. } => cost,
+        };
+        if economy.money < *cost {
+            return;
+        }
+        economy.money -= *cost;
+        pool.items.push(shop.items[shop.highlighted].clone());
     }
 }
 
@@ -90,7 +145,7 @@ fn start_placement(
     mut next_state: ResMut<NextState<GamePlayState>>,
 ) {
     if action_state.just_pressed(&EconomyAction::PlacementPhase) {
-        next_state.set(GamePlayState::Placement);
+        next_state.set(GamePlayState::Rolling);
     }
 }
 

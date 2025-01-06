@@ -12,7 +12,7 @@ impl Plugin for PlacementPlugin {
         app.add_plugins(InputManagerPlugin::<PlacementAction>::default())
             .init_resource::<ActionState<PlacementAction>>()
             .insert_resource(PlacementAction::default_input_map())
-            .add_systems(OnEnter(GameState::Game), setup)
+            .add_systems(OnEnter(GamePlayState::Placement), setup)
             .add_systems(
                 Update,
                 (
@@ -237,8 +237,8 @@ fn start_wave(
 ) {
     if action_state.just_pressed(&PlacementAction::EndPlacement) {
         next_state.set(GamePlayState::Wave);
-        commands.spawn((Wave {
+        commands.spawn(Wave {
             timer: Timer::from_seconds(20.0, TimerMode::Once),
-        },));
+        });
     }
 }

@@ -1,6 +1,7 @@
 mod camera;
 mod economy;
 mod placement;
+mod rolling;
 mod wave;
 
 use super::GameState;
@@ -12,8 +13,8 @@ use bevy_asset_loader::prelude::*;
 use bevy_common_assets::ron::RonAssetPlugin;
 use camera::CameraPlugin;
 use economy::EconomyPlugin;
-use leafwing_input_manager::prelude::*;
 use placement::{CursorPlaceholder, PlacementPlugin};
+use rolling::RollingPlugin;
 use std::collections::HashMap;
 use std::f32::consts::PI;
 use std::time::Duration;
@@ -31,6 +32,7 @@ impl Plugin for GamePlugin {
                 CameraPlugin,
                 EconomyPlugin,
                 PlacementPlugin,
+                RollingPlugin,
                 WavePlugin,
                 RonAssetPlugin::<AssetCollections>::new(&["game.ron"]),
                 VleueNavigatorPlugin,
@@ -38,8 +40,8 @@ impl Plugin for GamePlugin {
             ))
             .init_resource::<Assets<TowerDetails>>()
             .init_resource::<Assets<EnemyDetails>>()
-            .add_systems(OnEnter(GameState::Game), setup)
-            .add_systems(Update, end_wave.run_if(in_state(GameState::Game)));
+            .init_resource::<DiePool>()
+            .add_systems(OnEnter(GameState::Game), setup);
     }
 }
 
@@ -48,6 +50,7 @@ impl Plugin for GamePlugin {
 enum GamePlayState {
     #[default]
     Economy,
+    Rolling,
     Placement,
     Wave,
 }
@@ -223,6 +226,87 @@ pub struct GltfAssets {
 #[derive(Default, Component)]
 struct Goal;
 
+#[derive(Resource)]
+struct DieFace {
+    primary_type: BaseElementType,
+    secondary_type: Option<BaseElementType>,
+    rarity: Rarity,
+}
+
+#[derive(Component, Debug, Clone, PartialEq)]
+enum BaseElementType {
+    Fire,  // Heat and destruction
+    Water, // Flow and adaptability
+    Earth, // Stability and strength
+    Wind,  // Movement and agility
+}
+
+#[derive(Component, Debug, Clone, PartialEq)]
+enum Rarity {
+    Common,
+    Uncommon,
+    Rare,
+    Epic,
+    Unique,
+}
+
+#[derive(Resource)]
+struct Die {
+    faces: [DieFace; 6],
+    rarity: Rarity,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum DieShopItem {
+    TypedDie {
+        primary_type: BaseElementType,
+        rarity: Rarity,
+        cost: usize,
+    },
+    RandomDie {
+        rarity: Rarity,
+        cost: usize,
+    },
+}
+
+#[derive(Resource)]
+struct DiePool {
+    highlighted: usize,
+    items: Vec<DieShopItem>,
+}
+
+impl Default for DiePool {
+    fn default() -> Self {
+        DiePool {
+            highlighted: 0,
+            items: vec![],
+        }
+    }
+}
+
+impl DiePool {
+    fn roll(&mut self) {
+        self.highlighted = 0;
+        for item in self.items.iter() {
+            match item {
+                DieShopItem::TypedDie {
+                    primary_type,
+                    rarity,
+                    ..
+                } => {
+                    info!(
+                        "Rolling a die with primary type: {:?} and rarity: {:?}",
+                        primary_type, rarity
+                    );
+                }
+                DieShopItem::RandomDie { rarity, .. } => {
+                    info!("Rolling a random die with rarity: {:?}", rarity);
+                }
+            }
+        }
+    }
+}
+
 fn setup(
     mut commands: Commands,
     assets_gltfmesh: Res<Assets<GltfMesh>>,
@@ -310,27 +394,4 @@ fn setup(
 #[derive(Default, Component)]
 struct Wave {
     timer: Timer,
-}
-
-fn end_wave(
-    mut next_state: ResMut<NextState<GamePlayState>>,
-    time: Res<Time>,
-    mut wave_query: Query<&mut Wave>,
-    mut enemy_query: Query<Entity, With<Enemy>>,
-) {
-    for mut wave in wave_query.iter_mut() {
-        wave.timer.tick(time.delta());
-        if wave.timer.finished() {
-            let mut all_enemies_dead = true;
-            for _ in enemy_query.iter_mut() {
-                all_enemies_dead = false;
-                break;
-            }
-
-            if all_enemies_dead {
-                info!("Wave ended");
-                next_state.set(GamePlayState::Economy);
-            }
-        }
-    }
 }

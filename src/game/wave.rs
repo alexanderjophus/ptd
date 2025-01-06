@@ -8,7 +8,7 @@ use crate::GameState;
 use super::{
     economy::Economy,
     placement::{Projectile, Tower},
-    EnemyAssets, GamePlayState, Goal,
+    EnemyAssets, GamePlayState, Goal, Wave,
 };
 
 pub struct WavePlugin;
@@ -27,6 +27,7 @@ impl Plugin for WavePlugin {
                 bullet_collision,
                 target_death,
                 enemy_goal_collision,
+                end_wave,
             )
                 .run_if(in_state(GameState::Game).and(in_state(GamePlayState::Wave))),
         );
@@ -236,6 +237,29 @@ fn target_death(
     for (ent, projectile) in &projectiles {
         if let Err(_) = enemies.get(projectile.target) {
             commands.entity(ent).despawn_recursive();
+        }
+    }
+}
+
+fn end_wave(
+    mut next_state: ResMut<NextState<GamePlayState>>,
+    time: Res<Time>,
+    mut wave_query: Query<&mut Wave>,
+    mut enemy_query: Query<Entity, With<Enemy>>,
+) {
+    for mut wave in wave_query.iter_mut() {
+        wave.timer.tick(time.delta());
+        if wave.timer.finished() {
+            let mut all_enemies_dead = true;
+            for _ in enemy_query.iter_mut() {
+                all_enemies_dead = false;
+                break;
+            }
+
+            if all_enemies_dead {
+                info!("Wave ended");
+                next_state.set(GamePlayState::Economy);
+            }
         }
     }
 }
