@@ -45,10 +45,9 @@ impl Plugin for EconomyPlugin {
             .add_systems(OnEnter(GameState::Game), economy_setup)
             .add_systems(
                 Update,
-                (choose_die, start_placement)
+                (choose_die, display_shop, start_placement)
                     .run_if(in_state(GamePlayState::Economy).and(in_state(GameState::Game))),
-            )
-            .add_systems(Update, update_resources.run_if(in_state(GameState::Game)));
+            );
     }
 }
 
@@ -105,13 +104,10 @@ struct DieShop {
 }
 
 #[derive(Component)]
-pub struct ResourcesTextOverlay;
+pub struct DieShopOverlay;
 
-fn economy_setup(mut commands: Commands, economy: Res<Economy>) {
-    commands.spawn((
-        Text(format!("Money: {}", economy.money)),
-        ResourcesTextOverlay,
-    ));
+fn economy_setup(mut commands: Commands) {
+    commands.spawn((Text("".to_string()), DieShopOverlay));
 }
 
 fn choose_die(
@@ -140,17 +136,48 @@ fn choose_die(
     }
 }
 
+fn display_shop(
+    shop: Res<DieShop>,
+    economy: Res<Economy>,
+    mut query: Query<(&mut Text, &DieShopOverlay)>,
+) {
+    for (mut text, _) in query.iter_mut() {
+        text.0 = format!(
+            "Shop\nMoney: {}\n\n{}",
+            economy.money,
+            shop.items
+                .iter()
+                .enumerate()
+                .map(|(i, item)| {
+                    let prefix = if i == shop.highlighted { ">> " } else { "   " };
+                    match item {
+                        DieShopItem::TypedDie {
+                            primary_type,
+                            rarity,
+                            cost,
+                        } => format!(
+                            "{}{} Die\nCost: {}\nType: {:?}\nRarity: {:?}",
+                            prefix, i, cost, primary_type, rarity
+                        ),
+                        DieShopItem::RandomDie { rarity, cost } => {
+                            format!(
+                                "{}{} Random Die\nCost: {}\nRarity: {:?}",
+                                prefix, i, cost, rarity
+                            )
+                        }
+                    }
+                })
+                .collect::<Vec<String>>()
+                .join("\n\n")
+        );
+    }
+}
+
 fn start_placement(
     action_state: Res<ActionState<EconomyAction>>,
     mut next_state: ResMut<NextState<GamePlayState>>,
 ) {
     if action_state.just_pressed(&EconomyAction::PlacementPhase) {
         next_state.set(GamePlayState::Rolling);
-    }
-}
-
-fn update_resources(mut query: Query<(&mut Text, &ResourcesTextOverlay)>, economy: Res<Economy>) {
-    for (mut text, _) in query.iter_mut() {
-        text.0 = format!("Money: {}", economy.money);
     }
 }
