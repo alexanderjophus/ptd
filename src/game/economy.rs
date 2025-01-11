@@ -178,6 +178,6 @@ fn start_placement(
     mut next_state: ResMut<NextState<GamePlayState>>,
 ) {
     if action_state.just_pressed(&EconomyAction::PlacementPhase) {
-        next_state.set(GamePlayState::Rolling);
+        next_state.set(GamePlayState::Placement);
     }
 }

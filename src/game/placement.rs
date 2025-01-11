@@ -12,7 +12,6 @@ impl Plugin for PlacementPlugin {
         app.add_plugins(InputManagerPlugin::<PlacementAction>::default())
             .init_resource::<ActionState<PlacementAction>>()
             .insert_resource(PlacementAction::default_input_map())
-            .add_systems(OnEnter(GamePlayState::Placement), setup)
             .add_systems(
                 Update,
                 (
@@ -95,28 +94,6 @@ pub struct TowerPlaceholder;
 #[reflect(Component)]
 pub struct CursorPlaceholder;
 
-fn setup(
-    mut commands: Commands,
-    assets_gltfmesh: Res<Assets<GltfMesh>>,
-    assets_towers: Res<Assets<TowerDetails>>,
-    res: Res<Assets<Gltf>>,
-    tower: Res<Resources>,
-) {
-    // spawn tower placeholder
-    let tower = assets_towers
-        .get(tower.towers[tower.current_tower])
-        .unwrap();
-    let tower_mesh = res.get(&tower.model).unwrap();
-    let tower_mesh_mesh = assets_gltfmesh.get(&tower_mesh.meshes[0]).unwrap();
-
-    commands.spawn((
-        Mesh3d(tower_mesh_mesh.primitives[0].mesh.clone()),
-        MeshMaterial3d(tower_mesh.materials[0].clone()),
-        Transform::from_scale(Vec3::splat(0.5)),
-        TowerPlaceholder,
-    ));
-}
-
 fn control_cursor(
     time: Res<Time>,
     action_state: Res<ActionState<PlacementAction>>,
@@ -142,17 +119,16 @@ fn placeholder_snap_to_cursor(
     let cursor_transform = cursor_query.single();
     let cursor_position = cursor_transform.translation;
 
-    let mut placeholder_transform = placeholder_query.single_mut();
-    let mut placeholder_position = placeholder_transform.translation;
+    placeholder_query
+        .iter_mut()
+        .for_each(|mut placeholder_transform| {
+            let snap_distance = 1.0;
+            let snap_x = (cursor_position.x - SNAP_OFFSET / snap_distance).round() + SNAP_OFFSET;
+            let snap_z = (cursor_position.z - SNAP_OFFSET / snap_distance).round() + SNAP_OFFSET;
 
-    let snap_distance = 1.0;
-    let snap_x = (cursor_position.x - SNAP_OFFSET / snap_distance).round() + SNAP_OFFSET;
-    let snap_z = (cursor_position.z - SNAP_OFFSET / snap_distance).round() + SNAP_OFFSET;
-
-    placeholder_position.x = snap_x;
-    placeholder_position.z = snap_z;
-
-    placeholder_transform.translation = placeholder_position;
+            placeholder_transform.translation.x = snap_x;
+            placeholder_transform.translation.z = snap_z;
+        });
 }
 
 fn toggle_placeholder_type(
@@ -189,8 +165,8 @@ fn place_tower(
     current_tower: Res<Resources>,
     placeholder_query: Query<&Transform, With<TowerPlaceholder>>,
 ) {
-    let placeholder_transform = placeholder_query.single();
     if action_state.just_pressed(&PlacementAction::PlaceTower) {
+        let placeholder_transform = placeholder_query.single();
         let placeholder_tower = assets_towers
             .get(current_tower.towers[current_tower.current_tower])
             .unwrap();
