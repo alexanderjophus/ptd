@@ -1,7 +1,6 @@
 mod camera;
 mod economy;
 mod placement;
-mod rolling;
 mod wave;
 
 use super::GameState;
@@ -14,12 +13,11 @@ use bevy_common_assets::ron::RonAssetPlugin;
 use camera::CameraPlugin;
 use economy::EconomyPlugin;
 use placement::{CursorPlaceholder, PlacementPlugin};
-use rolling::RollingPlugin;
 use std::collections::HashMap;
 use std::f32::consts::PI;
 use std::time::Duration;
 use vleue_navigator::prelude::*;
-use wave::{Enemy, EnemyDetails, EnemySpawner, WavePlugin};
+use wave::{EnemyDetails, EnemySpawner, WavePlugin};
 
 const SNAP_OFFSET: f32 = 0.5;
 
@@ -32,7 +30,6 @@ impl Plugin for GamePlugin {
                 CameraPlugin,
                 EconomyPlugin,
                 PlacementPlugin,
-                RollingPlugin,
                 WavePlugin,
                 RonAssetPlugin::<AssetCollections>::new(&["game.ron"]),
                 VleueNavigatorPlugin,
@@ -50,7 +47,6 @@ impl Plugin for GamePlugin {
 enum GamePlayState {
     #[default]
     Economy,
-    Rolling,
     Placement,
     Wave,
 }
