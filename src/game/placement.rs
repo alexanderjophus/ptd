@@ -166,7 +166,7 @@ fn place_tower(
     placeholder_query: Query<&Transform, With<TowerPlaceholder>>,
 ) {
     if action_state.just_pressed(&PlacementAction::PlaceTower) {
-        let placeholder_transform = placeholder_query.single();
+        let placeholder_transform = placeholder_query.single(); // known bug: will panic if player places tower but none selected
         let placeholder_tower = assets_towers
             .get(current_tower.towers[current_tower.current_tower])
             .unwrap();

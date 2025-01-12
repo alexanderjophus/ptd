@@ -1,6 +1,7 @@
 mod camera;
 mod economy;
 mod placement;
+mod roll;
 mod wave;
 
 use super::GameState;
@@ -13,6 +14,8 @@ use bevy_common_assets::ron::RonAssetPlugin;
 use camera::CameraPlugin;
 use economy::EconomyPlugin;
 use placement::{CursorPlaceholder, PlacementPlugin};
+use rand::Rng;
+use roll::RollPlugin;
 use std::collections::HashMap;
 use std::f32::consts::PI;
 use std::time::Duration;
@@ -30,6 +33,7 @@ impl Plugin for GamePlugin {
                 CameraPlugin,
                 EconomyPlugin,
                 PlacementPlugin,
+                RollPlugin,
                 WavePlugin,
                 RonAssetPlugin::<AssetCollections>::new(&["game.ron"]),
                 VleueNavigatorPlugin,
@@ -37,8 +41,9 @@ impl Plugin for GamePlugin {
             ))
             .init_resource::<Assets<TowerDetails>>()
             .init_resource::<Assets<EnemyDetails>>()
-            .init_resource::<DiePool>()
-            .add_systems(OnEnter(GameState::Game), setup);
+            .add_event::<DiePurchaseEvent>()
+            .add_systems(OnEnter(GameState::Game), setup)
+            .add_systems(Update, die_purchased.run_if(in_state(GameState::Game)));
     }
 }
 
@@ -47,6 +52,7 @@ impl Plugin for GamePlugin {
 enum GamePlayState {
     #[default]
     Economy,
+    Rolling,
     Placement,
     Wave,
 }
@@ -222,10 +228,9 @@ pub struct GltfAssets {
 #[derive(Default, Component)]
 struct Goal;
 
-#[derive(Resource)]
+#[derive(Resource, Debug, Clone, PartialEq)]
 struct DieFace {
     primary_type: BaseElementType,
-    secondary_type: Option<BaseElementType>,
     rarity: Rarity,
 }
 
@@ -246,61 +251,63 @@ enum Rarity {
     Unique,
 }
 
-#[derive(Resource)]
+#[derive(Event)]
+struct DiePurchaseEvent(Die);
+
+#[derive(Resource, Debug, Clone, PartialEq)]
 struct Die {
+    // the faces of the die
+    faces: [DieFace; 6],
+    // the rarity of the die
+    rarity: Rarity,
+    // the current monetary value of the die
+    value: usize,
+}
+
+impl Die {
+    fn roll(&self) -> DieFace {
+        let mut rng = rand::thread_rng();
+        let face = rng.gen_range(0..6);
+        self.faces[face].clone()
+    }
+}
+
+struct DieBuilder {
     faces: [DieFace; 6],
     rarity: Rarity,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-enum DieShopItem {
-    TypedDie {
-        primary_type: BaseElementType,
-        rarity: Rarity,
-        cost: usize,
-    },
-    RandomDie {
-        rarity: Rarity,
-        cost: usize,
-    },
+impl DieBuilder {
+    pub fn from_type(selected_type: BaseElementType) -> Self {
+        let face = DieFace {
+            primary_type: selected_type,
+            rarity: Rarity::Common, // todo: make this random
+        };
+        DieBuilder {
+            faces: [
+                face.clone(),
+                face.clone(),
+                face.clone(),
+                face.clone(),
+                face.clone(),
+                face,
+            ],
+            rarity: Rarity::Common,
+        }
+    }
+
+    fn build(self) -> Die {
+        Die {
+            faces: self.faces,
+            rarity: self.rarity,
+            value: 10,
+        }
+    }
 }
 
-#[derive(Resource)]
+#[derive(Resource, Debug, Clone, PartialEq)]
 struct DiePool {
-    highlighted: usize,
-    items: Vec<DieShopItem>,
-}
-
-impl Default for DiePool {
-    fn default() -> Self {
-        DiePool {
-            highlighted: 0,
-            items: vec![],
-        }
-    }
-}
-
-impl DiePool {
-    fn roll(&mut self) {
-        self.highlighted = 0;
-        for item in self.items.iter() {
-            match item {
-                DieShopItem::TypedDie {
-                    primary_type,
-                    rarity,
-                    ..
-                } => {
-                    info!(
-                        "Rolling a die with primary type: {:?} and rarity: {:?}",
-                        primary_type, rarity
-                    );
-                }
-                DieShopItem::RandomDie { rarity, .. } => {
-                    info!("Rolling a random die with rarity: {:?}", rarity);
-                }
-            }
-        }
-    }
+    dice: Vec<Die>,
 }
 
 fn setup(
@@ -390,4 +397,10 @@ fn setup(
 #[derive(Default, Component)]
 struct Wave {
     timer: Timer,
+}
+
+fn die_purchased(mut die_pool: ResMut<DiePool>, mut ev_purchased: EventReader<DiePurchaseEvent>) {
+    for ev in ev_purchased.read() {
+        die_pool.dice.push(ev.0.clone());
+    }
 }

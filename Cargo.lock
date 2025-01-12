@@ -3940,6 +3940,7 @@ dependencies = [
  "bevy_egui",
  "bevy_infinite_grid",
  "leafwing-input-manager",
+ "rand",
  "serde",
  "vleue_navigator",
 ]

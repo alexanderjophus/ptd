@@ -3,7 +3,7 @@ use leafwing_input_manager::{prelude::*, Actionlike, InputControlKind};
 
 use crate::GameState;
 
-use super::{BaseElementType, DiePool, DieShopItem, GamePlayState, Rarity};
+use super::{BaseElementType, Die, DieBuilder, DiePurchaseEvent, GamePlayState};
 
 pub struct EconomyPlugin;
 
@@ -16,30 +16,10 @@ impl Plugin for EconomyPlugin {
             .insert_resource(DieShop {
                 highlighted: 0,
                 items: vec![
-                    DieShopItem::TypedDie {
-                        primary_type: BaseElementType::Fire,
-                        rarity: Rarity::Common,
-                        cost: 10,
-                    },
-                    DieShopItem::TypedDie {
-                        primary_type: BaseElementType::Water,
-                        rarity: Rarity::Common,
-                        cost: 10,
-                    },
-                    DieShopItem::TypedDie {
-                        primary_type: BaseElementType::Earth,
-                        rarity: Rarity::Common,
-                        cost: 10,
-                    },
-                    DieShopItem::TypedDie {
-                        primary_type: BaseElementType::Wind,
-                        rarity: Rarity::Common,
-                        cost: 10,
-                    },
-                    DieShopItem::RandomDie {
-                        rarity: Rarity::Rare,
-                        cost: 30,
-                    },
+                    DieBuilder::from_type(BaseElementType::Fire).build(),
+                    DieBuilder::from_type(BaseElementType::Water).build(),
+                    DieBuilder::from_type(BaseElementType::Earth).build(),
+                    DieBuilder::from_type(BaseElementType::Wind).build(),
                 ],
             })
             .add_systems(OnEnter(GameState::Game), economy_setup)
@@ -82,7 +62,7 @@ impl EconomyAction {
         input_map.insert(Self::BuyDie, GamepadButton::East);
         input_map.insert(Self::PlacementPhase, GamepadButton::South);
 
-        // // Default kbm input bindings
+        // Default kbm input bindings
         input_map.insert(Self::ToggleDieLeft, KeyCode::KeyQ);
         input_map.insert(Self::ToggleDieRight, KeyCode::KeyE);
         input_map.insert(Self::BuyDie, KeyCode::Space);
@@ -99,7 +79,7 @@ pub struct Economy {
 
 #[derive(Resource, Debug, Clone, PartialEq)]
 struct DieShop {
-    items: Vec<DieShopItem>,
+    items: Vec<Die>,
     highlighted: usize,
 }
 
@@ -114,7 +94,7 @@ fn choose_die(
     action_state: Res<ActionState<EconomyAction>>,
     mut economy: ResMut<Economy>,
     mut shop: ResMut<DieShop>,
-    mut pool: ResMut<DiePool>,
+    mut ev_die_purchase: EventWriter<DiePurchaseEvent>,
 ) {
     if action_state.just_pressed(&EconomyAction::ToggleDieLeft) {
         shop.highlighted = (shop.highlighted + shop.items.len() - 1) % shop.items.len();
@@ -124,15 +104,12 @@ fn choose_die(
     }
     // Buy the die, remove costs, add to diepool resource
     if action_state.just_pressed(&EconomyAction::BuyDie) {
-        let cost = match &shop.items[shop.highlighted] {
-            DieShopItem::TypedDie { cost, .. } => cost,
-            DieShopItem::RandomDie { cost, .. } => cost,
-        };
-        if economy.money < *cost {
+        let cost = shop.items[shop.highlighted].value;
+        if economy.money < cost {
             return;
         }
-        economy.money -= *cost;
-        pool.items.push(shop.items[shop.highlighted].clone());
+        economy.money -= cost;
+        ev_die_purchase.send(DiePurchaseEvent(shop.items[shop.highlighted].clone()));
     }
 }
 
@@ -150,22 +127,10 @@ fn display_shop(
                 .enumerate()
                 .map(|(i, item)| {
                     let prefix = if i == shop.highlighted { ">> " } else { "   " };
-                    match item {
-                        DieShopItem::TypedDie {
-                            primary_type,
-                            rarity,
-                            cost,
-                        } => format!(
-                            "{}{} Die\nCost: {}\nType: {:?}\nRarity: {:?}",
-                            prefix, i, cost, primary_type, rarity
-                        ),
-                        DieShopItem::RandomDie { rarity, cost } => {
-                            format!(
-                                "{}{} Random Die\nCost: {}\nRarity: {:?}",
-                                prefix, i, cost, rarity
-                            )
-                        }
-                    }
+                    format!(
+                        "{}{} Die\nCost: {}\nRarity: {:?}",
+                        prefix, i, 10, item.rarity
+                    )
                 })
                 .collect::<Vec<String>>()
                 .join("\n\n")
@@ -178,6 +143,6 @@ fn start_placement(
     mut next_state: ResMut<NextState<GamePlayState>>,
 ) {
     if action_state.just_pressed(&EconomyAction::PlacementPhase) {
-        next_state.set(GamePlayState::Placement);
+        next_state.set(GamePlayState::Rolling);
     }
 }
