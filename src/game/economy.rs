@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use leafwing_input_manager::{prelude::*, Actionlike, InputControlKind};
 
-use crate::GameState;
+use crate::{despawn_screen, GameState};
 
 use super::{BaseElementType, Die, DieBuilder, DiePurchaseEvent, GamePlayState};
 
@@ -27,6 +27,10 @@ impl Plugin for EconomyPlugin {
                 Update,
                 (choose_die, display_shop, start_placement)
                     .run_if(in_state(GamePlayState::Economy).and(in_state(GameState::Game))),
+            )
+            .add_systems(
+                OnExit(GamePlayState::Economy),
+                despawn_screen::<DieShopOverlay>,
             );
     }
 }
@@ -87,7 +91,7 @@ struct DieShop {
 pub struct DieShopOverlay;
 
 fn economy_setup(mut commands: Commands) {
-    commands.spawn((Text("".to_string()), DieShopOverlay));
+    commands.spawn((Text::default(), DieShopOverlay));
 }
 
 fn choose_die(
@@ -127,10 +131,7 @@ fn display_shop(
                 .enumerate()
                 .map(|(i, item)| {
                     let prefix = if i == shop.highlighted { ">> " } else { "   " };
-                    format!(
-                        "{}{} Die\nCost: {}\nRarity: {:?}",
-                        prefix, i, 10, item.rarity
-                    )
+                    format!("{}{}", prefix, item)
                 })
                 .collect::<Vec<String>>()
                 .join("\n\n")

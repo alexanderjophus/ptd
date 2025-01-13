@@ -41,6 +41,12 @@ impl Plugin for GamePlugin {
             ))
             .init_resource::<Assets<TowerDetails>>()
             .init_resource::<Assets<EnemyDetails>>()
+            .init_resource::<DiePool>()
+            .insert_resource(DiePool {
+                dice: Vec::new(),
+                highlighted: 0,
+            })
+            .register_type::<DiePool>()
             .add_event::<DiePurchaseEvent>()
             .add_systems(OnEnter(GameState::Game), setup)
             .add_systems(Update, die_purchased.run_if(in_state(GameState::Game)));
@@ -228,13 +234,31 @@ pub struct GltfAssets {
 #[derive(Default, Component)]
 struct Goal;
 
-#[derive(Resource, Debug, Clone, PartialEq)]
+#[derive(Resource, Debug, Clone, PartialEq, Reflect)]
+#[reflect(Resource)]
 struct DieFace {
     primary_type: BaseElementType,
     rarity: Rarity,
 }
 
-#[derive(Component, Debug, Clone, PartialEq)]
+impl std::fmt::Display for DieFace {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // write the primary type
+        write!(
+            f,
+            "{}",
+            match self.primary_type {
+                BaseElementType::Fire => "Fire",
+                BaseElementType::Water => "Water",
+                BaseElementType::Earth => "Earth",
+                BaseElementType::Wind => "Wind",
+            }
+        )
+    }
+}
+
+#[derive(Resource, Debug, Clone, PartialEq, Reflect)]
+#[reflect(Resource)]
 enum BaseElementType {
     Fire,  // Heat and destruction
     Water, // Flow and adaptability
@@ -242,7 +266,8 @@ enum BaseElementType {
     Wind,  // Movement and agility
 }
 
-#[derive(Component, Debug, Clone, PartialEq)]
+#[derive(Resource, Debug, Clone, PartialEq, Reflect)]
+#[reflect(Resource)]
 enum Rarity {
     Common,
     Uncommon,
@@ -251,15 +276,26 @@ enum Rarity {
     Unique,
 }
 
+impl Rarity {
+    fn colour(&self) -> Color {
+        match self {
+            Rarity::Common => Color::srgb(0.0, 0.0, 0.0),
+            Rarity::Uncommon => Color::srgb(0.0, 0.0, 1.0),
+            Rarity::Rare => Color::srgb(0.0, 1.0, 0.0),
+            Rarity::Epic => Color::srgb(1.0, 0.0, 0.0),
+            Rarity::Unique => Color::srgb(1.0, 1.0, 0.0),
+        }
+    }
+}
+
 #[derive(Event)]
 struct DiePurchaseEvent(Die);
 
-#[derive(Resource, Debug, Clone, PartialEq)]
+#[derive(Resource, Debug, Clone, PartialEq, Reflect)]
+#[reflect(Resource)]
 struct Die {
     // the faces of the die
     faces: [DieFace; 6],
-    // the rarity of the die
-    rarity: Rarity,
     // the current monetary value of the die
     value: usize,
 }
@@ -272,9 +308,23 @@ impl Die {
     }
 }
 
+impl std::fmt::Display for Die {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Die with faces: {},{},{},{},{},{}",
+            self.faces[0],
+            self.faces[1],
+            self.faces[2],
+            self.faces[3],
+            self.faces[4],
+            self.faces[5]
+        )
+    }
+}
+
 struct DieBuilder {
     faces: [DieFace; 6],
-    rarity: Rarity,
 }
 
 impl DieBuilder {
@@ -292,22 +342,22 @@ impl DieBuilder {
                 face.clone(),
                 face,
             ],
-            rarity: Rarity::Common,
         }
     }
 
     fn build(self) -> Die {
         Die {
             faces: self.faces,
-            rarity: self.rarity,
             value: 10,
         }
     }
 }
 
-#[derive(Resource, Debug, Clone, PartialEq)]
+#[derive(Resource, Default, Debug, Clone, PartialEq, Reflect)]
+#[reflect(Resource)]
 struct DiePool {
     dice: Vec<Die>,
+    highlighted: usize,
 }
 
 fn setup(
