@@ -3,7 +3,7 @@ use leafwing_input_manager::{prelude::*, Actionlike, InputControlKind};
 
 use crate::GameState;
 
-use super::{GamePlayState, Obstacle, Resources, TowerDetails, Wave, SNAP_OFFSET};
+use super::{BaseElementType, GamePlayState, Obstacle, Resources, TowerDetails, Wave, SNAP_OFFSET};
 
 pub struct PlacementPlugin;
 
@@ -66,14 +66,12 @@ impl PlacementAction {
     }
 }
 
-#[derive(Reflect, Component, Default)]
+#[derive(Reflect, Component)]
 #[reflect(Component)]
 pub struct Tower {
     pub name: String,
     pub cost: u32,
-    pub range: f32,
-    pub damage: u32,
-    pub projectile_speed: f32,
+    pub r#type: BaseElementType,
     pub attack_speed: Timer,
 }
 
@@ -179,17 +177,12 @@ fn place_tower(
             .spawn((
                 Mesh3d(tower_mesh_mesh.primitives[0].mesh.clone()),
                 MeshMaterial3d(tower_mesh.materials[0].clone()),
-                placeholder_transform.clone(),
+                *placeholder_transform,
                 Tower {
                     name: placeholder_tower.name.clone(),
                     cost: placeholder_tower.cost,
-                    range: placeholder_tower.range,
-                    damage: placeholder_tower.damage,
-                    projectile_speed: placeholder_tower.projectile_speed,
-                    attack_speed: Timer::from_seconds(
-                        1. / placeholder_tower.rate_of_fire,
-                        TimerMode::Repeating,
-                    ),
+                    r#type: placeholder_tower.element_type.clone(),
+                    attack_speed: Timer::from_seconds(1.0, TimerMode::Repeating), // todo
                 },
                 Obstacle,
             ))

@@ -7,7 +7,7 @@ mod splash;
 
 use bevy::{asset::AssetMetaCheck, prelude::*};
 
-pub const GAME_NAME: &str = "Jophus' PTD";
+pub const GAME_NAME: &str = "Jophus' TD";
 
 // Enum that will be used as a global state for the game
 #[derive(Clone, Eq, PartialEq, Debug, Hash, Default, States)]

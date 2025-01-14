@@ -25,7 +25,7 @@ impl Plugin for EconomyPlugin {
             .add_systems(OnEnter(GameState::Game), economy_setup)
             .add_systems(
                 Update,
-                (choose_die, display_shop, start_placement)
+                (choose_die, display_shop, start_rolling)
                     .run_if(in_state(GamePlayState::Economy).and(in_state(GameState::Game))),
             )
             .add_systems(
@@ -139,7 +139,7 @@ fn display_shop(
     }
 }
 
-fn start_placement(
+fn start_rolling(
     action_state: Res<ActionState<EconomyAction>>,
     mut next_state: ResMut<NextState<GamePlayState>>,
 ) {

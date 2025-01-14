@@ -1,8 +1,0 @@
-({
-    "orc": Enemy (
-        name: "Orc",
-        health: 15,
-        speed: 5,
-        model: "models/werewolf.glb",
-    ),
-})

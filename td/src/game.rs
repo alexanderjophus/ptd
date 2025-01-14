@@ -5,10 +5,12 @@ mod roll;
 mod wave;
 
 use super::GameState;
+use bevy::asset::LoadedFolder;
+use bevy::gltf::GltfMesh;
+use bevy::math::vec2;
 use bevy::prelude::*;
-use bevy::{
-    ecs::system::SystemState, gltf::Gltf, gltf::GltfMesh, math::vec2, render::primitives::Aabb,
-};
+use bevy::utils::HashMap;
+use bevy::{ecs::system::SystemState, gltf::Gltf, render::primitives::Aabb};
 use bevy_asset_loader::prelude::*;
 use bevy_common_assets::ron::RonAssetPlugin;
 use camera::CameraPlugin;
@@ -16,11 +18,11 @@ use economy::EconomyPlugin;
 use placement::{CursorPlaceholder, PlacementPlugin};
 use rand::Rng;
 use roll::RollPlugin;
-use std::collections::HashMap;
 use std::f32::consts::PI;
 use std::time::Duration;
+use td_derive::Filterable;
 use vleue_navigator::prelude::*;
-use wave::{EnemyDetails, EnemySpawner, WavePlugin};
+use wave::{EnemySpawner, WavePlugin};
 
 const SNAP_OFFSET: f32 = 0.5;
 
@@ -48,8 +50,12 @@ impl Plugin for GamePlugin {
             })
             .register_type::<DiePool>()
             .add_event::<DiePurchaseEvent>()
+            .add_event::<DieRolledEvent>()
             .add_systems(OnEnter(GameState::Game), setup)
-            .add_systems(Update, die_purchased.run_if(in_state(GameState::Game)));
+            .add_systems(
+                Update,
+                (die_purchased, die_rolled).run_if(in_state(GameState::Game)),
+            );
     }
 }
 
@@ -84,120 +90,121 @@ impl FromWorld for Resources {
     }
 }
 
+#[derive(AssetCollection, Resource)]
+pub struct AllAssets {
+    #[asset(key = "towers", collection(typed))]
+    pub towers: Vec<Handle<TowerDetails>>,
+    #[asset(key = "enemies", collection(typed))]
+    pub enemies: Vec<Handle<EnemyDetails>>,
+}
+
 /// Representation of a loaded tower file.
-#[derive(Asset, Debug, TypePath, Default)]
+#[derive(Asset, Debug, TypePath, Filterable)]
 pub struct TowerDetails {
     pub name: String,
+    #[filter]
     pub cost: u32,
-    pub range: f32,
-    pub damage: u32,
-    pub rate_of_fire: f32,
-    pub projectile_speed: f32,
+    #[filter]
+    pub element_type: BaseElementType,
+    pub model: Handle<Gltf>,
+}
+
+/// Representation of a loaded enemy file.
+#[derive(Asset, Debug, TypePath)]
+pub struct EnemyDetails {
+    pub name: String,
+    pub health: u32,
+    pub speed: f32,
     pub model: Handle<Gltf>,
 }
 
 #[derive(serde::Deserialize, Debug, Clone)]
 enum CustomDynamicAsset {
-    Tower {
-        name: String,
-        cost: u32,
-        range: f32,
-        damage: u32,
-        rate_of_fire: f32,
-        projectile_speed: f32,
-        model: String,
-    },
-    Enemy {
-        name: String,
-        health: u32,
-        speed: f32,
-        model: String,
-    },
+    Towers(Vec<TowerDetailsRon>),
+    Enemies(Vec<EnemyDetailsRon>),
 }
 
 impl DynamicAsset for CustomDynamicAsset {
-    // At this point, the content of your dynamic asset file is done loading.
-    // You should return untyped handles to any assets that need to finish loading for your
-    // dynamic asset to be ready.
     fn load(&self, asset_server: &AssetServer) -> Vec<UntypedHandle> {
+        info!("Loading dynamic asset");
         match self {
-            CustomDynamicAsset::Tower { model, .. } => {
-                vec![asset_server.load::<Gltf>(model).untyped()]
-            }
-            CustomDynamicAsset::Enemy { model, .. } => {
-                vec![asset_server.load::<Gltf>(model).untyped()]
-            }
+            CustomDynamicAsset::Towers(towers) => towers
+                .iter()
+                .map(|tower| asset_server.load::<Gltf>(tower.model.clone()).untyped())
+                .collect(),
+            CustomDynamicAsset::Enemies(enemies) => enemies
+                .iter()
+                .map(|enemy| asset_server.load::<Gltf>(enemy.model.clone()).untyped())
+                .collect(),
         }
     }
 
-    // This method is called when all asset handles returned from `load` are done loading.
-    // The handles that you return, should also be loaded.
     fn build(&self, world: &mut World) -> Result<DynamicAssetType, anyhow::Error> {
+        info!("Building dynamic asset");
         match self {
-            CustomDynamicAsset::Tower {
-                name,
-                cost,
-                range,
-                damage,
-                rate_of_fire,
-                projectile_speed,
-                model,
-            } => {
-                info!(
-                    "Building tower: {} with cost: {}, range: {}, damage: {}, rate_of_fire: {}",
-                    name, cost, range, damage, rate_of_fire
-                );
-                let mut gltf_system_state = SystemState::<Res<AssetServer>>::new(world);
-                let asset_server = gltf_system_state.get(world);
-                let handle: Handle<Gltf> = asset_server.load(model);
-
-                let mut towers_system_state =
-                    SystemState::<ResMut<Assets<TowerDetails>>>::new(world);
-                let mut towers = towers_system_state.get_mut(world);
-                Ok(DynamicAssetType::Single(
-                    towers
-                        .add(TowerDetails {
-                            name: name.clone(),
-                            cost: *cost,
-                            range: *range,
-                            damage: *damage,
-                            rate_of_fire: *rate_of_fire,
-                            projectile_speed: *projectile_speed,
-                            model: handle,
-                        })
-                        .untyped(),
-                ))
+            CustomDynamicAsset::Towers(towers) => {
+                let mut towers_collection = vec![];
+                for tower in towers {
+                    let model = world
+                        .get_resource::<AssetServer>()
+                        .unwrap()
+                        .load(tower.model.clone());
+                    let mut tower_details =
+                        SystemState::<ResMut<Assets<TowerDetails>>>::new(world).get_mut(world);
+                    let handle = tower_details.add(TowerDetails {
+                        name: tower.name.clone(),
+                        cost: tower.cost,
+                        element_type: tower.element_type.clone(),
+                        model: model.clone(),
+                    });
+                    towers_collection.push(handle.untyped());
+                    info!("Built tower: {}", tower.name);
+                }
+                Ok(DynamicAssetType::Collection(towers_collection))
             }
-            CustomDynamicAsset::Enemy {
-                name,
-                health,
-                speed,
-                model,
-            } => {
-                info!(
-                    "Building enemy: {} with health: {}, speed: {}",
-                    name, health, speed
-                );
-                let mut gltf_system_state = SystemState::<Res<AssetServer>>::new(world);
-                let asset_server = gltf_system_state.get(world);
-                let handle = asset_server.load(model);
-
-                let mut enemies_system_state =
-                    SystemState::<ResMut<Assets<EnemyDetails>>>::new(world);
-                let mut enemies = enemies_system_state.get_mut(world);
-                Ok(DynamicAssetType::Single(
-                    enemies
-                        .add(EnemyDetails {
-                            name: name.clone(),
-                            health: *health,
-                            speed: *speed,
-                            model: handle,
-                        })
-                        .untyped(),
-                ))
+            CustomDynamicAsset::Enemies(enemies) => {
+                let mut enemies_collection = vec![];
+                for enemy in enemies {
+                    let model = world
+                        .get_resource::<AssetServer>()
+                        .unwrap()
+                        .load(enemy.model.clone());
+                    let mut assets = world.get_resource_mut::<Assets<EnemyDetails>>().unwrap();
+                    let handle = assets.add(EnemyDetails {
+                        name: enemy.name.clone(),
+                        health: enemy.health,
+                        speed: enemy.speed,
+                        model: model.clone(),
+                    });
+                    enemies_collection.push(handle.untyped());
+                    info!("Built enemy: {}", enemy.name);
+                }
+                Ok(DynamicAssetType::Collection(enemies_collection))
             }
         }
     }
+}
+
+#[derive(serde::Deserialize, Asset, Debug, TypePath, Clone)]
+pub struct TowerDetailsRon {
+    pub name: String,
+    pub cost: u32,
+    pub element_type: BaseElementType,
+    pub model: String,
+}
+
+#[derive(serde::Deserialize, Asset, Debug, TypePath, Clone)]
+pub struct EnemyDetailsRon {
+    pub name: String,
+    pub health: u32,
+    pub speed: f32,
+    pub model: String,
+}
+
+#[derive(AssetCollection, Resource)]
+pub struct GltfAssets {
+    #[asset(path = "models/house.glb")]
+    pub house: Handle<Gltf>,
 }
 
 #[derive(serde::Deserialize, Asset, TypePath)]
@@ -209,26 +216,6 @@ impl DynamicAssetCollection for AssetCollections {
             dynamic_assets.register_asset(key, Box::new(asset.clone()));
         }
     }
-}
-
-#[derive(AssetCollection, Resource)]
-pub struct TowerAssets {
-    #[asset(key = "centaur")]
-    pub centaur: Handle<TowerDetails>,
-    #[asset(key = "demon")]
-    pub demon: Handle<TowerDetails>,
-}
-
-#[derive(AssetCollection, Resource)]
-pub struct EnemyAssets {
-    #[asset(key = "orc")]
-    pub orc: Handle<EnemyDetails>,
-}
-
-#[derive(AssetCollection, Resource)]
-pub struct GltfAssets {
-    #[asset(path = "models/house.glb")]
-    pub house: Handle<Gltf>,
 }
 
 #[derive(Default, Component)]
@@ -248,6 +235,7 @@ impl std::fmt::Display for DieFace {
             f,
             "{}",
             match self.primary_type {
+                BaseElementType::None => "None",
                 BaseElementType::Fire => "Fire",
                 BaseElementType::Water => "Water",
                 BaseElementType::Earth => "Earth",
@@ -257,9 +245,11 @@ impl std::fmt::Display for DieFace {
     }
 }
 
-#[derive(Resource, Debug, Clone, PartialEq, Reflect)]
+#[derive(Resource, serde::Deserialize, Default, Debug, Clone, PartialEq, Reflect)]
 #[reflect(Resource)]
-enum BaseElementType {
+pub enum BaseElementType {
+    #[default]
+    None, // No element
     Fire,  // Heat and destruction
     Water, // Flow and adaptability
     Earth, // Stability and strength
@@ -276,20 +266,11 @@ enum Rarity {
     Unique,
 }
 
-impl Rarity {
-    fn colour(&self) -> Color {
-        match self {
-            Rarity::Common => Color::srgb(0.0, 0.0, 0.0),
-            Rarity::Uncommon => Color::srgb(0.0, 0.0, 1.0),
-            Rarity::Rare => Color::srgb(0.0, 1.0, 0.0),
-            Rarity::Epic => Color::srgb(1.0, 0.0, 0.0),
-            Rarity::Unique => Color::srgb(1.0, 1.0, 0.0),
-        }
-    }
-}
-
 #[derive(Event)]
 struct DiePurchaseEvent(Die);
+
+#[derive(Event)]
+struct DieRolledEvent(DieFace);
 
 #[derive(Resource, Debug, Clone, PartialEq, Reflect)]
 #[reflect(Resource)]
@@ -360,12 +341,26 @@ struct DiePool {
     highlighted: usize,
 }
 
+impl DiePool {
+    // remove the die from the pool and return the rolled face
+    fn roll(&mut self) -> DieFace {
+        let idx = self.highlighted;
+        let die = self.dice.remove(idx);
+        die.roll()
+    }
+}
+
+#[derive(Resource, Debug, Clone, PartialEq, Reflect)]
+struct TowerPool {
+    towers: Vec<Handle<TowerDetails>>,
+    highlighted: usize,
+}
+
 fn setup(
     mut commands: Commands,
     assets_gltfmesh: Res<Assets<GltfMesh>>,
     mut assets_mesh: ResMut<Assets<Mesh>>,
     assets_enemydetails: Res<Assets<EnemyDetails>>,
-    enemyassets: Res<EnemyAssets>,
     gltfassets: Res<GltfAssets>,
     res: Res<Assets<Gltf>>,
 ) {
@@ -391,8 +386,9 @@ fn setup(
         CursorPlaceholder,
     ));
 
-    let enemy = assets_enemydetails.get(&enemyassets.orc).unwrap();
-    let enemy_mesh = res.get(&enemy.model).unwrap();
+    // get first enemy from assets
+    let enemy = assets_enemydetails.iter().next().unwrap();
+    let enemy_mesh = res.get(&enemy.1.model).unwrap();
     let enemy_mesh_mesh = assets_gltfmesh.get(&enemy_mesh.meshes[0]).unwrap();
 
     commands.spawn((
@@ -452,5 +448,32 @@ struct Wave {
 fn die_purchased(mut die_pool: ResMut<DiePool>, mut ev_purchased: EventReader<DiePurchaseEvent>) {
     for ev in ev_purchased.read() {
         die_pool.dice.push(ev.0.clone());
+    }
+}
+
+fn die_rolled(mut ev_rolled: EventReader<DieRolledEvent>) {
+    for ev in ev_rolled.read() {
+        info!("Rolled die face: {}", ev.0);
+    }
+}
+
+pub trait Filterable {
+    fn matches(&self, filter: &Filter) -> bool;
+}
+
+#[derive(Default)]
+pub struct Filter {
+    conditions: Vec<FilterCondition>,
+}
+
+impl Filter {
+    pub fn new() -> Self {
+        Self {
+            conditions: Vec::new(),
+        }
+    }
+
+    pub fn add_condition(&mut self, condition: FilterCondition) {
+        self.conditions.push(condition);
     }
 }

@@ -58,7 +58,7 @@ fn setup(mut commands: Commands) {
 
     // spawn 2D overlay
     commands.spawn((
-        Camera2d::default(),
+        Camera2d,
         Camera {
             order: 1,
             clear_color: ClearColorConfig::None,

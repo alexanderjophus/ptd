@@ -8,7 +8,7 @@ use crate::GameState;
 use super::{
     economy::Economy,
     placement::{Projectile, Tower},
-    EnemyAssets, GamePlayState, Goal, Wave,
+    EnemyDetails, GamePlayState, Goal, Wave,
 };
 
 pub struct WavePlugin;
@@ -48,20 +48,10 @@ pub struct Enemy {
     speed: f32,
 }
 
-/// Representation of a loaded enemy file.
-#[derive(Asset, Debug, TypePath, Component)]
-pub struct EnemyDetails {
-    pub name: String,
-    pub health: u32,
-    pub speed: f32,
-    pub model: Handle<Gltf>,
-}
-
 fn spawn_enemy(
     mut commands: Commands,
     assets_enemies: Res<Assets<EnemyDetails>>,
     assets_gltfmesh: Res<Assets<GltfMesh>>,
-    assets_gltf: Res<EnemyAssets>,
     res: Res<Assets<Gltf>>,
     time: Res<Time>,
     mut query: Query<(&mut EnemySpawner, &Transform)>,
@@ -69,7 +59,7 @@ fn spawn_enemy(
     for (mut spawner, transform) in query.iter_mut() {
         spawner.timer.tick(time.delta());
         if spawner.timer.finished() {
-            let enemy = assets_enemies.get(&assets_gltf.orc).unwrap();
+            let enemy = assets_enemies.iter().next().unwrap().1;
             let enemy_mesh = res.get(&enemy.model).unwrap();
             let enemy_mesh_mesh = assets_gltfmesh.get(&enemy_mesh.meshes[0]).unwrap();
 
@@ -137,14 +127,14 @@ fn tower_shooting(
                     .distance(enemy_transform.translation);
 
                 let placeholder_mesh = meshes.add(Sphere::new(0.1));
-                if distance < tower.range {
+                if distance < 5.0 {
                     commands.spawn((
                         Mesh3d(placeholder_mesh.clone()),
                         Transform::from_translation(bullet_spawn),
                         Projectile {
                             target: enemy,
-                            speed: tower.projectile_speed,
-                            damage: tower.damage,
+                            speed: 1.0,
+                            damage: 5,
                             lifetime: Timer::new(Duration::from_secs(1), TimerMode::Once),
                         },
                     ));
@@ -229,7 +219,7 @@ fn target_death(
     mut economy: ResMut<Economy>,
 ) {
     for (ent, enemy) in &enemies {
-        if enemy.health <= 0 {
+        if enemy.health == 0 {
             commands.entity(ent).despawn_recursive();
             economy.money += 10;
         }

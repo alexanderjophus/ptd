@@ -1,9 +1,9 @@
 use bevy::prelude::*;
 use leafwing_input_manager::{prelude::*, Actionlike, InputControlKind};
 
-use crate::GameState;
+use crate::{despawn_screen, GameState};
 
-use super::{DiePool, GamePlayState};
+use super::{DiePool, DieRolledEvent, GamePlayState};
 
 pub struct RollPlugin;
 
@@ -15,8 +15,12 @@ impl Plugin for RollPlugin {
             .add_systems(OnEnter(GamePlayState::Rolling), rolling_setup)
             .add_systems(
                 Update,
-                (choose_die, display_die_pool)
+                (handle_input, display_die_pool)
                     .run_if(in_state(GameState::Game).and(in_state(GamePlayState::Rolling))),
+            )
+            .add_systems(
+                OnExit(GamePlayState::Rolling),
+                despawn_screen::<DieRollingOverlay>,
             );
     }
 }
@@ -27,6 +31,7 @@ enum RollAction {
     HighlightLeft,
     HighlightRight,
     Roll,
+    Placement,
 }
 
 impl Actionlike for RollAction {
@@ -35,6 +40,7 @@ impl Actionlike for RollAction {
             RollAction::HighlightLeft => InputControlKind::Button,
             RollAction::HighlightRight => InputControlKind::Button,
             RollAction::Roll => InputControlKind::Button,
+            RollAction::Placement => InputControlKind::Button,
         }
     }
 }
@@ -47,12 +53,14 @@ impl RollAction {
         // Default gamepad input bindings
         input_map.insert(Self::HighlightLeft, GamepadButton::DPadLeft);
         input_map.insert(Self::HighlightRight, GamepadButton::DPadRight);
-        input_map.insert(Self::Roll, GamepadButton::South);
+        input_map.insert(Self::Roll, GamepadButton::East);
+        input_map.insert(Self::Placement, GamepadButton::South);
 
         // Default kbm input bindings
         input_map.insert(Self::HighlightLeft, KeyCode::KeyQ);
         input_map.insert(Self::HighlightRight, KeyCode::KeyE);
-        input_map.insert(Self::Roll, KeyCode::Enter);
+        input_map.insert(Self::Roll, KeyCode::Space);
+        input_map.insert(Self::Placement, KeyCode::Enter);
 
         input_map
     }
@@ -66,7 +74,12 @@ fn rolling_setup(mut commands: Commands) {
     commands.spawn((Text::default(), DieRollingOverlay));
 }
 
-fn choose_die(action_state: Res<ActionState<RollAction>>, mut die_pool: ResMut<DiePool>) {
+fn handle_input(
+    action_state: Res<ActionState<RollAction>>,
+    mut die_pool: ResMut<DiePool>,
+    mut next_state: ResMut<NextState<GamePlayState>>,
+    mut ev_rolled: EventWriter<DieRolledEvent>,
+) {
     if action_state.just_pressed(&RollAction::HighlightLeft) {
         die_pool.highlighted =
             (die_pool.highlighted + die_pool.dice.len() - 1) % die_pool.dice.len();
@@ -77,11 +90,12 @@ fn choose_die(action_state: Res<ActionState<RollAction>>, mut die_pool: ResMut<D
     }
 
     if action_state.just_pressed(&RollAction::Roll) {
-        let idx = die_pool.highlighted;
-        let die = die_pool.dice.remove(idx);
-        let face = die.roll();
-        println!("Rolled a {:?}", face);
-        die_pool.highlighted = 0;
+        let face = die_pool.roll();
+        ev_rolled.send(DieRolledEvent(face));
+    }
+
+    if action_state.just_pressed(&RollAction::Placement) {
+        next_state.set(GamePlayState::Placement);
     }
 }
 

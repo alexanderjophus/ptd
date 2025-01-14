@@ -1,0 +1,14 @@
+[package]
+name = "td_derive"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "2.0.96"
+quote = "1.0.38"
+proc-macro2 = "1.0.93"
