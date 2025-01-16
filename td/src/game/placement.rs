@@ -1,9 +1,9 @@
-use bevy::{gltf::GltfMesh, prelude::*, render::primitives::Aabb};
+use bevy::{gltf::GltfMesh, prelude::*};
 use leafwing_input_manager::{prelude::*, Actionlike, InputControlKind};
 
 use crate::GameState;
 
-use super::{BaseElementType, GamePlayState, Obstacle, Resources, TowerDetails, Wave, SNAP_OFFSET};
+use super::{BaseElementType, GamePlayState, TowerDetails, TowerPool, Wave, SNAP_OFFSET};
 
 pub struct PlacementPlugin;
 
@@ -93,8 +93,27 @@ pub struct TowerPlaceholder;
 #[reflect(Component)]
 pub struct CursorPlaceholder;
 
-fn setup(mut commands: Commands, mut assets_mesh: ResMut<Assets<Mesh>>) {
-    commands.spawn((TowerPlaceholder, Transform::default()));
+fn setup(
+    mut commands: Commands,
+    current_tower: ResMut<TowerPool>,
+    mut assets_mesh: ResMut<Assets<Mesh>>,
+    assets_gltfmesh: ResMut<Assets<GltfMesh>>,
+    assets_towers: ResMut<Assets<TowerDetails>>,
+    res: Res<Assets<Gltf>>,
+) {
+    // pick first tower in the list
+    let tower = current_tower.towers[current_tower.highlighted];
+    let tower_details = &assets_towers.get(tower).unwrap().model;
+    let gltf = res.get(tower_details).unwrap();
+    let mesh = assets_gltfmesh.get(&gltf.meshes[0]).unwrap();
+    let mesh3d = mesh.primitives[0].mesh.clone();
+    let mat = gltf.materials[0].clone();
+    commands.spawn((
+        Mesh3d(mesh3d),
+        Transform::default().with_translation(Vec3::new(SNAP_OFFSET, 0.0, SNAP_OFFSET)),
+        MeshMaterial3d(mat),
+        TowerPlaceholder,
+    ));
 
     commands.spawn((
         Mesh3d(assets_mesh.add(Circle::new(0.5))),
@@ -144,72 +163,27 @@ fn placeholder_snap_to_cursor(
 
 fn toggle_placeholder_type(
     action_state: Res<ActionState<PlacementAction>>,
-    mut current_tower: ResMut<Resources>,
+    mut current_tower: ResMut<TowerPool>,
     assets_gltfmesh: Res<Assets<GltfMesh>>,
     assets_towers: Res<Assets<TowerDetails>>,
     res: Res<Assets<Gltf>>,
     mut query: Query<(&mut Mesh3d, &mut MeshMaterial3d<StandardMaterial>), With<TowerPlaceholder>>,
 ) {
     if action_state.just_pressed(&PlacementAction::ToggleTowerType) {
-        current_tower.current_tower =
-            (current_tower.current_tower + 1) % current_tower.towers.len();
-
-        let placeholder_tower_id = current_tower.towers[current_tower.current_tower];
-        let placeholder_tower = &assets_towers.get(placeholder_tower_id).unwrap().model;
-        let placeholder_tower_gltf = res.get(placeholder_tower).unwrap();
-        let placeholder_tower_mesh = assets_gltfmesh
-            .get(&placeholder_tower_gltf.meshes[0])
-            .unwrap();
-        let (mut mesh, mut mat) = query.single_mut();
-        mesh.0 = placeholder_tower_mesh.primitives[0].mesh.clone();
-        mat.0 = placeholder_tower_gltf.materials[0].clone();
+        current_tower.highlighted = (current_tower.highlighted + 1) % current_tower.towers.len();
+        let tower = current_tower.towers[current_tower.highlighted];
+        let tower_details = &assets_towers.get(tower).unwrap().model;
+        let gltf = res.get(tower_details).unwrap();
+        let mesh = assets_gltfmesh.get(&gltf.meshes[0]).unwrap();
+        query.iter_mut().for_each(|(mut mesh3d, mut mat)| {
+            mesh3d.0 = mesh.primitives[0].mesh.clone();
+            mat.0 = gltf.materials[0].clone();
+        });
     }
 }
 
-fn place_tower(
-    action_state: Res<ActionState<PlacementAction>>,
-    mut commands: Commands,
-    assets_towers: Res<Assets<TowerDetails>>,
-    mut assets_mesh: ResMut<Assets<Mesh>>,
-    res: Res<Assets<Gltf>>,
-    assets_gltfmesh: Res<Assets<GltfMesh>>,
-    current_tower: Res<Resources>,
-    placeholder_query: Query<&Transform, With<TowerPlaceholder>>,
-) {
-    if action_state.just_pressed(&PlacementAction::PlaceTower) {
-        let placeholder_transform = placeholder_query.single(); // known bug: will panic if player places tower but none selected
-        let placeholder_tower = assets_towers
-            .get(current_tower.towers[current_tower.current_tower])
-            .unwrap();
-        let tower_mesh = res.get(&placeholder_tower.model).unwrap();
-        let tower_mesh_mesh = assets_gltfmesh.get(&tower_mesh.meshes[0]).unwrap();
-
-        // maybe can be rectangle
-        let obstacle_mesh = assets_mesh.add(Cuboid::new(2.0, 2.0, 1.0));
-        commands
-            .spawn((
-                Mesh3d(tower_mesh_mesh.primitives[0].mesh.clone()),
-                MeshMaterial3d(tower_mesh.materials[0].clone()),
-                *placeholder_transform,
-                Tower {
-                    name: placeholder_tower.name.clone(),
-                    cost: placeholder_tower.cost,
-                    r#type: placeholder_tower.element_type.clone(),
-                    attack_speed: Timer::from_seconds(1.0, TimerMode::Repeating), // todo
-                },
-                Obstacle,
-            ))
-            .with_children(|parent| {
-                parent.spawn((
-                    Mesh3d(obstacle_mesh.clone()),
-                    Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2))
-                        .with_translation(Vec3::new(0.0, 0.0, -0.5)),
-                    Visibility::Hidden,
-                    Aabb::from_min_max(Vec3::ZERO, Vec3::ONE * 2.0),
-                    Obstacle,
-                ));
-            });
-    }
+fn place_tower(action_state: Res<ActionState<PlacementAction>>) {
+    if action_state.just_pressed(&PlacementAction::PlaceTower) {}
 }
 
 fn start_wave(

@@ -76,24 +76,6 @@ enum GamePlayState {
 #[derive(Component, Debug)]
 struct Obstacle;
 
-#[derive(Resource, Debug)]
-pub struct Resources {
-    towers: Vec<AssetId<TowerDetails>>,
-    current_tower: usize,
-}
-
-impl FromWorld for Resources {
-    fn from_world(world: &mut World) -> Self {
-        let mut system_state = SystemState::<Res<Assets<TowerDetails>>>::new(world);
-        let tower_assets = system_state.get(world);
-        let towers = tower_assets.iter().map(|(id, _)| id.clone()).collect();
-        Resources {
-            towers,
-            current_tower: 0,
-        }
-    }
-}
-
 #[derive(AssetCollection, Resource)]
 pub struct AllAssets {
     #[asset(key = "towers", collection(typed))]
@@ -103,7 +85,7 @@ pub struct AllAssets {
 }
 
 /// Representation of a loaded tower file.
-#[derive(Asset, Resource, Debug, Reflect, PartialEq, Clone)]
+#[derive(Asset, Resource, Debug, PartialEq, Clone, TypePath)]
 pub struct TowerDetails {
     pub name: String,
     pub cost: u32,
@@ -128,7 +110,6 @@ enum CustomDynamicAsset {
 
 impl DynamicAsset for CustomDynamicAsset {
     fn load(&self, asset_server: &AssetServer) -> Vec<UntypedHandle> {
-        info!("Loading dynamic asset");
         match self {
             CustomDynamicAsset::Towers(towers) => towers
                 .iter()
@@ -142,7 +123,6 @@ impl DynamicAsset for CustomDynamicAsset {
     }
 
     fn build(&self, world: &mut World) -> Result<DynamicAssetType, anyhow::Error> {
-        info!("Building dynamic asset");
         match self {
             CustomDynamicAsset::Towers(towers) => {
                 let mut towers_collection = vec![];
@@ -352,9 +332,9 @@ impl DiePool {
     }
 }
 
-#[derive(Resource, Default, Debug, PartialEq, Reflect)]
+#[derive(Resource, Default, Debug, PartialEq)]
 struct TowerPool {
-    towers: Vec<TowerDetails>,
+    towers: Vec<AssetId<TowerDetails>>,
     highlighted: usize,
 }
 
@@ -453,14 +433,12 @@ fn die_rolled(
     for ev in ev_rolled.read() {
         let face = ev.0.clone();
         let selected_type = face.primary_type.clone();
-        let tower = tower_assets
+        let (id, tower) = tower_assets
             .iter()
             .filter(|(_, tower)| tower.element_type == selected_type)
             .choose(&mut rand::thread_rng())
-            .unwrap()
-            .1
-            .clone();
+            .unwrap();
         info!("Selected tower: {}", tower.name);
-        tower_pool.towers.push(tower);
+        tower_pool.towers.push(id);
     }
 }
