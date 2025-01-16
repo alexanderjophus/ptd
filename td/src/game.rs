@@ -5,7 +5,6 @@ mod roll;
 mod wave;
 
 use super::GameState;
-use bevy::asset::LoadedFolder;
 use bevy::gltf::GltfMesh;
 use bevy::math::vec2;
 use bevy::prelude::*;
@@ -15,12 +14,12 @@ use bevy_asset_loader::prelude::*;
 use bevy_common_assets::ron::RonAssetPlugin;
 use camera::CameraPlugin;
 use economy::EconomyPlugin;
-use placement::{CursorPlaceholder, PlacementPlugin};
+use placement::PlacementPlugin;
+use rand::seq::IteratorRandom;
 use rand::Rng;
 use roll::RollPlugin;
 use std::f32::consts::PI;
 use std::time::Duration;
-use td_derive::Filterable;
 use vleue_navigator::prelude::*;
 use wave::{EnemySpawner, WavePlugin};
 
@@ -44,8 +43,13 @@ impl Plugin for GamePlugin {
             .init_resource::<Assets<TowerDetails>>()
             .init_resource::<Assets<EnemyDetails>>()
             .init_resource::<DiePool>()
+            .init_resource::<TowerPool>()
             .insert_resource(DiePool {
                 dice: Vec::new(),
+                highlighted: 0,
+            })
+            .insert_resource(TowerPool {
+                towers: Vec::new(),
                 highlighted: 0,
             })
             .register_type::<DiePool>()
@@ -99,12 +103,10 @@ pub struct AllAssets {
 }
 
 /// Representation of a loaded tower file.
-#[derive(Asset, Debug, TypePath, Filterable)]
+#[derive(Asset, Resource, Debug, Reflect, PartialEq, Clone)]
 pub struct TowerDetails {
     pub name: String,
-    #[filter]
     pub cost: u32,
-    #[filter]
     pub element_type: BaseElementType,
     pub model: Handle<Gltf>,
 }
@@ -350,9 +352,9 @@ impl DiePool {
     }
 }
 
-#[derive(Resource, Debug, Clone, PartialEq, Reflect)]
+#[derive(Resource, Default, Debug, PartialEq, Reflect)]
 struct TowerPool {
-    towers: Vec<Handle<TowerDetails>>,
+    towers: Vec<TowerDetails>,
     highlighted: usize,
 }
 
@@ -376,14 +378,6 @@ fn setup(
             ..default()
         },
         Name::new("Directional Light"),
-    ));
-
-    commands.spawn((
-        Mesh3d(assets_mesh.add(Circle::new(0.5))),
-        Transform::default()
-            .with_translation(Vec3::new(SNAP_OFFSET, 0.0, SNAP_OFFSET))
-            .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
-        CursorPlaceholder,
     ));
 
     // get first enemy from assets
@@ -451,29 +445,22 @@ fn die_purchased(mut die_pool: ResMut<DiePool>, mut ev_purchased: EventReader<Di
     }
 }
 
-fn die_rolled(mut ev_rolled: EventReader<DieRolledEvent>) {
+fn die_rolled(
+    tower_assets: Res<Assets<TowerDetails>>,
+    mut tower_pool: ResMut<TowerPool>,
+    mut ev_rolled: EventReader<DieRolledEvent>,
+) {
     for ev in ev_rolled.read() {
-        info!("Rolled die face: {}", ev.0);
-    }
-}
-
-pub trait Filterable {
-    fn matches(&self, filter: &Filter) -> bool;
-}
-
-#[derive(Default)]
-pub struct Filter {
-    conditions: Vec<FilterCondition>,
-}
-
-impl Filter {
-    pub fn new() -> Self {
-        Self {
-            conditions: Vec::new(),
-        }
-    }
-
-    pub fn add_condition(&mut self, condition: FilterCondition) {
-        self.conditions.push(condition);
+        let face = ev.0.clone();
+        let selected_type = face.primary_type.clone();
+        let tower = tower_assets
+            .iter()
+            .filter(|(_, tower)| tower.element_type == selected_type)
+            .choose(&mut rand::thread_rng())
+            .unwrap()
+            .1
+            .clone();
+        info!("Selected tower: {}", tower.name);
+        tower_pool.towers.push(tower);
     }
 }

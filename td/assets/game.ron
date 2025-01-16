@@ -15,10 +15,10 @@
     ]),
     "enemies": Enemies ([
         EnemyDetailsRon (
-            name: "Goblin",
+            name: "Werewolf",
             health: 10,
             speed: 1,
-            model: "models/orc.glb",
+            model: "models/werewolf.glb",
         )
     ]),
 })

@@ -12,6 +12,7 @@ impl Plugin for PlacementPlugin {
         app.add_plugins(InputManagerPlugin::<PlacementAction>::default())
             .init_resource::<ActionState<PlacementAction>>()
             .insert_resource(PlacementAction::default_input_map())
+            .add_systems(OnEnter(GamePlayState::Placement), setup)
             .add_systems(
                 Update,
                 (
@@ -91,6 +92,18 @@ pub struct TowerPlaceholder;
 #[derive(Reflect, Component, Default)]
 #[reflect(Component)]
 pub struct CursorPlaceholder;
+
+fn setup(mut commands: Commands, mut assets_mesh: ResMut<Assets<Mesh>>) {
+    commands.spawn((TowerPlaceholder, Transform::default()));
+
+    commands.spawn((
+        Mesh3d(assets_mesh.add(Circle::new(0.5))),
+        Transform::default()
+            .with_translation(Vec3::new(SNAP_OFFSET, 0.0, SNAP_OFFSET))
+            .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
+        CursorPlaceholder,
+    ));
+}
 
 fn control_cursor(
     time: Res<Time>,
