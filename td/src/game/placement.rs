@@ -72,7 +72,7 @@ impl PlacementAction {
 pub struct Tower {
     pub name: String,
     pub cost: u32,
-    pub r#type: BaseElementType,
+    pub element_type: BaseElementType,
     pub attack_speed: Timer,
 }
 
@@ -182,8 +182,38 @@ fn toggle_placeholder_type(
     }
 }
 
-fn place_tower(action_state: Res<ActionState<PlacementAction>>) {
-    if action_state.just_pressed(&PlacementAction::PlaceTower) {}
+fn place_tower(
+    action_state: Res<ActionState<PlacementAction>>,
+    mut commands: Commands,
+    assets_towers: Res<Assets<TowerDetails>>,
+    res: Res<Assets<Gltf>>,
+    assets_gltfmesh: Res<Assets<GltfMesh>>,
+    mut tower_pool: ResMut<TowerPool>,
+    placeholder_query: Query<&Transform, With<TowerPlaceholder>>,
+) {
+    if action_state.just_pressed(&PlacementAction::PlaceTower) {
+        let placeholder_transform = placeholder_query.single();
+        let tower = tower_pool.towers[tower_pool.highlighted];
+        let tower_details = assets_towers.get(tower).unwrap();
+        let gltf = res.get(&tower_details.model).unwrap();
+        let mesh = assets_gltfmesh.get(&gltf.meshes[0]).unwrap();
+        let mesh3d = mesh.primitives[0].mesh.clone();
+        let mat = gltf.materials[0].clone();
+        commands.spawn((
+            Mesh3d(mesh3d),
+            Transform::from_translation(placeholder_transform.translation),
+            MeshMaterial3d(mat),
+            Tower {
+                name: tower_details.name.clone(),
+                cost: tower_details.cost,
+                element_type: tower_details.element_type.clone(),
+                attack_speed: Timer::from_seconds(1.0, TimerMode::Repeating),
+            },
+        ));
+
+        let idx = tower_pool.highlighted;
+        tower_pool.towers.remove(idx);
+    }
 }
 
 fn start_wave(

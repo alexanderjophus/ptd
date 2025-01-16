@@ -38,7 +38,7 @@ struct OnSplashScreen;
 struct SplashCamera;
 
 fn splash_setup(mut commands: Commands) {
-    commands.spawn((Camera2d::default(), SplashCamera));
+    commands.spawn((Camera2d, SplashCamera));
 
     commands.spawn((Text(GAME_NAME.to_string()), OnSplashScreen));
 }
