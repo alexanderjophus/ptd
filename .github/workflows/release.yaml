@@ -6,9 +6,9 @@ on:
       - "*"
 
 env:
-  binary: ptd
+  binary: td
   add_binaries_to_github_release: true
-  itch_target: alexanderjophus/ptd
+  itch_target: alexanderjophus/td
 
 jobs:
   # Build for wasm

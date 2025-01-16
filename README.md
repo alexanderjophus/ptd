@@ -1,4 +1,4 @@
-# ptd
+# td
 
 Started life as a pokemon tower defense game. Now it's just a tower defense game.
 
