@@ -3,7 +3,7 @@ use leafwing_input_manager::{prelude::*, Actionlike, InputControlKind};
 
 use crate::GameState;
 
-use super::{BaseElementType, GamePlayState, TowerDetails, TowerPool, Wave, SNAP_OFFSET};
+use super::{BaseElementType, GamePlayState, Obstacle, TowerDetails, TowerPool, Wave, SNAP_OFFSET};
 
 pub struct PlacementPlugin;
 
@@ -21,6 +21,7 @@ impl Plugin for PlacementPlugin {
                     display_placeholder,
                     toggle_placeholder_type,
                     place_tower,
+                    display_tower_pool,
                     start_wave,
                 )
                     .run_if(in_state(GameState::Game).and(in_state(GamePlayState::Placement))),
@@ -94,6 +95,9 @@ pub struct TowerPlaceholder;
 #[reflect(Component)]
 pub struct CursorPlaceholder;
 
+#[derive(Reflect, Component)]
+pub struct OnPlacementOverlay;
+
 fn setup(
     mut commands: Commands,
     current_tower: ResMut<TowerPool>,
@@ -128,6 +132,8 @@ fn setup(
         Transform::default().with_translation(Vec3::new(SNAP_OFFSET, 0.0, SNAP_OFFSET)),
         CursorPlaceholder,
     ));
+
+    commands.spawn((Text::default(), OnPlacementOverlay));
 }
 
 fn control_cursor(
@@ -230,10 +236,38 @@ fn place_tower(
                 element_type: tower_details.element_type.clone(),
                 attack_speed: Timer::from_seconds(1.0, TimerMode::Repeating),
             },
+            Obstacle,
         ));
 
         let idx = tower_pool.highlighted;
         tower_pool.towers.remove(idx);
+    }
+}
+
+fn display_tower_pool(
+    tower_pool: Res<TowerPool>,
+    assets_towers: Res<Assets<TowerDetails>>,
+    mut query: Query<&mut Text, With<OnPlacementOverlay>>,
+) {
+    for mut text in query.iter_mut() {
+        text.0 = format!(
+            "Towers\n\n{}",
+            tower_pool
+                .towers
+                .iter()
+                .enumerate()
+                .map(|(i, tower)| {
+                    let prefix = if i == tower_pool.highlighted {
+                        ">> "
+                    } else {
+                        "   "
+                    };
+                    let tower_details = assets_towers.get(*tower).unwrap();
+                    format!("{}{}", prefix, tower_details.name)
+                })
+                .collect::<Vec<String>>()
+                .join("\n")
+        );
     }
 }
 
