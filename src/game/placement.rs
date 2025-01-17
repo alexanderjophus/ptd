@@ -18,6 +18,7 @@ impl Plugin for PlacementPlugin {
                 (
                     control_cursor,
                     placeholder_snap_to_cursor,
+                    display_placeholder,
                     toggle_placeholder_type,
                     place_tower,
                     start_wave,
@@ -100,26 +101,31 @@ fn setup(
     assets_gltfmesh: ResMut<Assets<GltfMesh>>,
     assets_towers: ResMut<Assets<TowerDetails>>,
     res: Res<Assets<Gltf>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     // pick first tower in the list
+    // will panic, need to address in situation where there are no towers
     let tower = current_tower.towers[current_tower.highlighted];
     let tower_details = &assets_towers.get(tower).unwrap().model;
     let gltf = res.get(tower_details).unwrap();
     let mesh = assets_gltfmesh.get(&gltf.meshes[0]).unwrap();
     let mesh3d = mesh.primitives[0].mesh.clone();
     let mat = gltf.materials[0].clone();
+    let pink = materials.add(StandardMaterial {
+        base_color: Color::srgb(1.0, 0.0, 1.0),
+        ..Default::default()
+    });
     commands.spawn((
         Mesh3d(mesh3d),
-        Transform::default().with_translation(Vec3::new(SNAP_OFFSET, 0.0, SNAP_OFFSET)),
         MeshMaterial3d(mat),
+        Transform::default().with_translation(Vec3::new(SNAP_OFFSET, 0.0, SNAP_OFFSET)),
         TowerPlaceholder,
     ));
 
     commands.spawn((
-        Mesh3d(assets_mesh.add(Circle::new(0.5))),
-        Transform::default()
-            .with_translation(Vec3::new(SNAP_OFFSET, 0.0, SNAP_OFFSET))
-            .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
+        Mesh3d(assets_mesh.add(Cylinder::new(0.5, 0.2))),
+        MeshMaterial3d(pink),
+        Transform::default().with_translation(Vec3::new(SNAP_OFFSET, 0.0, SNAP_OFFSET)),
         CursorPlaceholder,
     ));
 }
@@ -163,23 +169,38 @@ fn placeholder_snap_to_cursor(
 
 fn toggle_placeholder_type(
     action_state: Res<ActionState<PlacementAction>>,
-    mut current_tower: ResMut<TowerPool>,
+    mut tower_pool: ResMut<TowerPool>,
+) {
+    if action_state.just_pressed(&PlacementAction::ToggleTowerType) {
+        tower_pool.toggle_highlighted();
+    }
+}
+
+fn display_placeholder(
+    mut commands: Commands,
+    tower_pool: ResMut<TowerPool>,
     assets_gltfmesh: Res<Assets<GltfMesh>>,
     assets_towers: Res<Assets<TowerDetails>>,
     res: Res<Assets<Gltf>>,
-    mut query: Query<(&mut Mesh3d, &mut MeshMaterial3d<StandardMaterial>), With<TowerPlaceholder>>,
+    mut query: Query<
+        (&mut Mesh3d, &mut MeshMaterial3d<StandardMaterial>, Entity),
+        With<TowerPlaceholder>,
+    >,
 ) {
-    if action_state.just_pressed(&PlacementAction::ToggleTowerType) {
-        current_tower.highlighted = (current_tower.highlighted + 1) % current_tower.towers.len();
-        let tower = current_tower.towers[current_tower.highlighted];
-        let tower_details = &assets_towers.get(tower).unwrap().model;
-        let gltf = res.get(tower_details).unwrap();
-        let mesh = assets_gltfmesh.get(&gltf.meshes[0]).unwrap();
-        query.iter_mut().for_each(|(mut mesh3d, mut mat)| {
-            mesh3d.0 = mesh.primitives[0].mesh.clone();
-            mat.0 = gltf.materials[0].clone();
+    if tower_pool.towers.is_empty() {
+        query.iter_mut().for_each(|(_, _, entity)| {
+            commands.entity(entity).despawn_recursive();
         });
+        return;
     }
+    let tower = tower_pool.towers[tower_pool.highlighted];
+    let tower_details = &assets_towers.get(tower).unwrap().model;
+    let gltf = res.get(tower_details).unwrap();
+    let mesh = assets_gltfmesh.get(&gltf.meshes[0]).unwrap();
+    query.iter_mut().for_each(|(mut mesh3d, mut mat, _)| {
+        mesh3d.0 = mesh.primitives[0].mesh.clone();
+        mat.0 = gltf.materials[0].clone();
+    });
 }
 
 fn place_tower(

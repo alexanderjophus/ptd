@@ -338,6 +338,15 @@ struct TowerPool {
     highlighted: usize,
 }
 
+impl TowerPool {
+    fn toggle_highlighted(&mut self) {
+        if self.towers.is_empty() {
+            return;
+        }
+        self.highlighted = (self.highlighted + 1) % self.towers.len();
+    }
+}
+
 fn setup(
     mut commands: Commands,
     assets_gltfmesh: Res<Assets<GltfMesh>>,
