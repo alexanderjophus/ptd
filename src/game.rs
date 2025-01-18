@@ -88,7 +88,6 @@ pub struct AllAssets {
 #[derive(Asset, Resource, Debug, PartialEq, Clone, TypePath)]
 pub struct TowerDetails {
     pub name: String,
-    pub cost: u32,
     pub element_type: BaseElementType,
     pub model: Handle<Gltf>,
 }
@@ -135,7 +134,6 @@ impl DynamicAsset for CustomDynamicAsset {
                         SystemState::<ResMut<Assets<TowerDetails>>>::new(world).get_mut(world);
                     let handle = tower_details.add(TowerDetails {
                         name: tower.name.clone(),
-                        cost: tower.cost,
                         element_type: tower.element_type.clone(),
                         model: model.clone(),
                     });
@@ -170,7 +168,6 @@ impl DynamicAsset for CustomDynamicAsset {
 #[derive(serde::Deserialize, Asset, Debug, TypePath, Clone)]
 pub struct TowerDetailsRon {
     pub name: String,
-    pub cost: u32,
     pub element_type: BaseElementType,
     pub model: String,
 }
@@ -311,7 +308,7 @@ impl DieBuilder {
     fn build(self) -> Die {
         Die {
             faces: self.faces,
-            value: 10,
+            value: 20,
         }
     }
 }

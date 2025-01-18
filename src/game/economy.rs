@@ -12,7 +12,7 @@ impl Plugin for EconomyPlugin {
         app.add_plugins(InputManagerPlugin::<EconomyAction>::default())
             .init_resource::<ActionState<EconomyAction>>()
             .insert_resource(EconomyAction::default_input_map())
-            .insert_resource(Economy { money: 100 })
+            .insert_resource(Economy { money: 50 })
             .insert_resource(DieShop {
                 highlighted: 0,
                 items: vec![

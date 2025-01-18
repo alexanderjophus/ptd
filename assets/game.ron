@@ -2,13 +2,11 @@
     "towers": Towers ([
         TowerDetailsRon (
             name: "Centaur",
-            cost: 10,
             element_type: Earth,
             model: "models/centaur.glb",
         ),
         TowerDetailsRon (
             name: "Demon",
-            cost: 10,
             element_type: Fire,
             model: "models/demon.glb",
         )

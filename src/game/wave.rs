@@ -114,6 +114,7 @@ fn tower_shooting(
     query: Query<(Entity, &Transform), With<Enemy>>,
     mut query_tower: Query<(&Transform, &mut Tower)>,
     mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
     time: Res<Time>,
 ) {
     for (enemy, enemy_transform) in query.iter() {
@@ -130,12 +131,16 @@ fn tower_shooting(
                 if distance < 5.0 {
                     commands.spawn((
                         Mesh3d(placeholder_mesh.clone()),
+                        MeshMaterial3d(materials.add(StandardMaterial {
+                            base_color: Color::srgb(1.0, 0.0, 0.0),
+                            ..Default::default()
+                        })),
                         Transform::from_translation(bullet_spawn),
                         Projectile {
                             target: enemy,
-                            speed: 1.0,
+                            speed: 10.0,
                             damage: 5,
-                            lifetime: Timer::new(Duration::from_secs(1), TimerMode::Once),
+                            lifetime: Timer::new(Duration::from_secs(5), TimerMode::Once),
                         },
                     ));
                     tower.attack_speed.reset();

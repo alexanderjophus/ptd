@@ -1,7 +1,7 @@
 use bevy::{gltf::GltfMesh, prelude::*};
 use leafwing_input_manager::{prelude::*, Actionlike, InputControlKind};
 
-use crate::GameState;
+use crate::{despawn_screen, GameState};
 
 use super::{BaseElementType, GamePlayState, Obstacle, TowerDetails, TowerPool, Wave, SNAP_OFFSET};
 
@@ -25,6 +25,10 @@ impl Plugin for PlacementPlugin {
                     start_wave,
                 )
                     .run_if(in_state(GameState::Game).and(in_state(GamePlayState::Placement))),
+            )
+            .add_systems(
+                OnExit(GamePlayState::Placement),
+                despawn_screen::<OnPlacementOverlay>,
             );
     }
 }
@@ -73,7 +77,6 @@ impl PlacementAction {
 #[reflect(Component)]
 pub struct Tower {
     pub name: String,
-    pub cost: u32,
     pub element_type: BaseElementType,
     pub attack_speed: Timer,
 }
@@ -232,7 +235,6 @@ fn place_tower(
             MeshMaterial3d(mat),
             Tower {
                 name: tower_details.name.clone(),
-                cost: tower_details.cost,
                 element_type: tower_details.element_type.clone(),
                 attack_speed: Timer::from_seconds(1.0, TimerMode::Repeating),
             },
